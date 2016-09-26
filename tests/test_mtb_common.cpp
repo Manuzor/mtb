@@ -1,11 +1,14 @@
-#include "mtb.hpp"
+#include "mtb_common.hpp"
 
 #include "catch.hpp"
 
-static_assert(mtb::IsPOD<void>(), "Type 'void' must be considered POD.");
-static_assert(mtb::IsPOD<void const>(), "Type 'void const' must be considered POD.");
-static_assert(mtb::IsNaN(mtb::NaN<float>()), "NaN() or IsNaN() aren't working properly.");
-static_assert(mtb::IsNaN(mtb::NaN<double>()), "NaN() or IsNaN() aren't working properly.");
+namespace mtb
+{
+  static_assert(IsPOD<void>(), "Type 'void' must be considered POD.");
+  static_assert(IsPOD<void const>(), "Type 'void const' must be considered POD.");
+  static_assert(IsNaN(NaN<float>()), "NaN() or IsNaN() aren't working properly.");
+  static_assert(IsNaN(NaN<double>()), "NaN() or IsNaN() aren't working properly.");
+}
 
 TEST_CASE("MTB_Defer", "[Common]")
 {

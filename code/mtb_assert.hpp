@@ -1,20 +1,24 @@
 #if !defined(MTB_HEADER_mtb_assert)
 #define MTB_HEADER_mtb_assert
 
-#include "mtb.hpp"
+#if defined(MTB_ASSERT_IMPLEMENTATION) && !defined(MTB_IMPLEMENTATION)
+  #define MTB_IMPLEMENTATION
+#endif
+
+#include "mtb_common.hpp"
 
 namespace mtb
 {
 /// Returning \c true means that the a debug break is required.
-using AssertHandler = bool(*)(
+using assert_handler = bool(*)(
   char const* FileName,     //< The name of the file where the assert is.
   size_t      Line,         //< The line number in the file where the assert is.
   char const* FunctionName, //< The name of the function where the assert is.
   char const* Expression,   //< The condition as captured by the MTB_Assert macro.
   char const* Message);     //< The user defined message.
 
-AssertHandler GetAssertHandler();
-void SetAssertHandler(AssertHandler AssertHandler);
+assert_handler GetAssertHandler();
+void SetAssertHandler(assert_handler AssertHandler);
 
 bool OnFailedCheck(
   char const* FileName,
@@ -125,18 +129,18 @@ static bool DefaultAssertHandler(
   return true;
 }
 
-static mtb_AssertHandler mtb_GlobalAssertHandler = &DefaultAssertHandler;
+static mtb::assert_handler GlobalAssertHandler = &DefaultAssertHandler;
 
-mtb_AssertHandler mtb::
+mtb::assert_handler mtb::
 GetAssertHandler()
 {
-  return mtb_GlobalAssertHandler;
+  return GlobalAssertHandler;
 }
 
 void mtb::
-SetAssertHandler(mtb_AssertHandler AssertHandler)
+SetAssertHandler(assert_handler AssertHandler)
 {
-  mtb_GlobalAssertHandler = AssertHandler;
+  GlobalAssertHandler = AssertHandler;
 }
 
 bool mtb::
@@ -148,7 +152,7 @@ OnFailedCheck(
   char const* MessageFormat,
   ...)
 {
-  if(!mtb_GlobalAssertHandler)
+  if(!GlobalAssertHandler)
   {
     // If there's no assert handler, always trigger a debug break.
     return true;
@@ -158,7 +162,7 @@ OnFailedCheck(
   // NOTE: Ensure message is a valid string, so at least let it be empty.
   char const* Message = MessageFormat ? MessageFormat : "";
 
-  return (*mtb_GlobalAssertHandler)(FileName, Line, FunctionName, Expression, Message);
+  return (*GlobalAssertHandler)(FileName, Line, FunctionName, Expression, Message);
 }
 
 

@@ -17,51 +17,36 @@ def remove_includes(content, *includeNames):
     content = content.replace('#include <{}>'.format(name), '')
   return content
 
-def make_glue(mostSignificant, *others):
-  template = '#if defined({0}) && !defined({1})\n' +\
-             '#define {1}\n' +\
-             '#endif\n'
-  glue = '\n'.join(template.format(mostSignificant, name) for name in others)
-  return glue
-
 
 #
 # Makers
 #
 @maker('mtb_platform')
-def make_mtb_platform(codeDir, *, needsGlue=True):
+def make_mtb_platform(codeDir):
   platformContent = (codeDir / 'mtb_platform.hpp').read_text()
-  # Note: mtb_platform.hpp needs no glue.
   return platformContent
 
-@maker('mtb')
-def make_mtb(codeDir, *, needsGlue=True):
-  platformContent = make_mtb_platform(codeDir, needsGlue=False)
-  mtbContent = (codeDir / 'mtb.hpp').read_text()
+@maker('mtb_common')
+def make_mtb_common(codeDir):
+  platformContent = make_mtb_platform(codeDir)
+  mtbContent = (codeDir / 'mtb_common.hpp').read_text()
   mtbContent = remove_includes(mtbContent, 'mtb_platform.hpp')
-  # Note: mtb.hpp needs no glue.
   return '{}\n\n{}'.format(platformContent, mtbContent)
 
 @maker('mtb_assert')
-def make_mtb_assert(codeDir, *, needsGlue=True):
-  mtbContent = make_mtb(codeDir, needsGlue=False)
+def make_mtb_assert(codeDir):
+  mtbContent = make_mtb_common(codeDir)
   assertContent = (codeDir / 'mtb_assert.hpp').read_text()
-  assertContent = remove_includes(assertContent, 'mtb.hpp')
-  glue = ''
-  if needsGlue:
-    glue = make_glue('MTB_ASSERT_IMPLEMENTATION', 'MTB_IMPLEMENTATION')
-  return '{}{}\n\n{}'.format(glue, mtbContent, assertContent)
+  assertContent = remove_includes(assertContent, 'mtb_common.hpp')
+  return '{}\n\n{}'.format(mtbContent, assertContent)
 
 @maker('mtb_memory')
-def make_mtb_memory(codeDir, *, needsGlue=True):
-  mtbContent = make_mtb(codeDir, needsGlue=False)
-  assertContent = make_mtb_assert(codeDir, needsGlue=False)
+def make_mtb_memory(codeDir):
+  mtbContent = make_mtb_common(codeDir)
+  assertContent = make_mtb_assert(codeDir)
   memoryContent = (codeDir / 'mtb_memory.hpp').read_text()
   memoryContent = remove_includes(memoryContent, 'mtb.hpp', 'mtb_assert.hpp')
-  glue = ''
-  if needsGlue:
-    glue = make_glue('MTB_ASSERT_IMPLEMENTATION', 'MTB_IMPLEMENTATION', 'MTB_ASSERT_IMPLEMENTATION')
-  return '{}{}\n\n{}'.format(glue, mtbContent, assertContent)
+  return '{}\n\n{}\n\n{}'.format(mtbContent, assertContent, memoryContent)
 
 
 #

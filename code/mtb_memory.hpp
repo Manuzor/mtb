@@ -1,7 +1,15 @@
 #if !defined(MTB_HEADER_memory)
 #define MTB_HEADER_memory
 
-#include "mtb.hpp"
+#if defined(MTB_MEMORY_IMPLEMENTATION) && !defined(MTB_IMPLEMENTATION)
+  #define MTB_IMPLEMENTATION
+#endif
+
+#if defined(MTB_MEMORY_IMPLEMENTATION) && !defined(MTB_ASSERT_IMPLEMENTATION)
+  #define MTB_ASSERT_IMPLEMENTATION
+#endif
+
+#include "mtb_common.hpp"
 #include "mtb_assert.hpp"
 
 namespace mtb

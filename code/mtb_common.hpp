@@ -1,5 +1,5 @@
-#if !defined(MTB_HEADER_mtb)
-#define MTB_HEADER_mtb
+#if !defined(MTB_HEADER_mtb_common)
+#define MTB_HEADER_mtb_common
 
 #include "mtb_platform.hpp"
 
@@ -801,18 +801,18 @@ struct impl_defer
 
 } // namespace mtb
 
-#endif // !defined(MTB_HEADER_mtb)
+#endif // !defined(MTB_HEADER_mtb_common)
 
 
 //
 // Implementation
 //
 
-#if defined(MTB_IMPLEMENTATION)
+#if defined(MTB_COMMON_IMPLEMENTATION)
 
 // Impl guard.
-#if !defined(MTB_IMPL_mtb)
-#define MTB_IMPL_mtb
+#if !defined(MTB_IMPL_mtb_common)
+#define MTB_IMPL_mtb_common
 
 #include <cmath>
 
@@ -911,5 +911,5 @@ AreNearlyEqual(float A, float B, float Epsilon)
   return Abs(A - B) <= Epsilon;
 }
 
-#endif // !defined(MTB_IMPL_mtb)
-#endif // defined(MTB_IMPLEMENTATION)
+#endif // !defined(MTB_IMPL_mtb_common)
+#endif // defined(MTB_COMMON_IMPLEMENTATION)
