@@ -721,9 +721,9 @@ template<typename t_a, typename t_b>
 inline void
 Swap(t_a& A, t_b& B)
 {
-  auto Temp = A;
-  A = B;
-  B = Temp;
+  auto Temp{ Move(A) };
+  A = Move(B);
+  B = Move(Temp);
 }
 
 /// Maps the given float Value from [0, 1] to [0, MaxValueOf(UNormType)]
