@@ -1,8 +1,12 @@
 #if !defined(MTB_HEADER_mtb_assert)
 #define MTB_HEADER_mtb_assert
 
-#if defined(MTB_ASSERT_IMPLEMENTATION) && !defined(MTB_IMPLEMENTATION)
-  #define MTB_IMPLEMENTATION
+#if defined(MTB_IMPLEMENTATION)
+  #define MTB_ASSERT_IMPLEMENTATION
+#endif
+
+#if defined(MTB_ASSERT_IMPLEMENTATION) && !defined(MTB_COMMON_IMPLEMENTATION)
+  #define MTB_COMMON_IMPLEMENTATION
 #endif
 
 #include "mtb_common.hpp"

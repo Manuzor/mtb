@@ -3,6 +3,10 @@
 
 #include "mtb_platform.hpp"
 
+#if defined(MTB_IMPLEMENTATION)
+  #define MTB_COMMON_IMPLEMENTATION
+#endif
+
 namespace mtb
 {
 //
@@ -588,14 +592,31 @@ InvSqrt(float Value);
 //
 // RoundDown
 //
-template<typename OutputType, typename InputType> struct impl_round_down
+template<typename OutputType, typename InputType>
+struct impl_round_down;
+
+template<typename OutputType>
+struct impl_round_down<OutputType, float>
 {
   static inline OutputType
-  Do(InputType Value)
+  Do(float Value)
   {
-    return Convert<OutputType>(std::floor(Value));
+    return Convert<OutputType>(::floorf(Value));
   }
 };
+
+template<typename OutputType>
+struct impl_round_down<OutputType, double>
+{
+  static inline OutputType
+  Do(double Value)
+  {
+    return Convert<OutputType>(::floor(Value));
+  }
+};
+
+template<typename OutputType, typename InputType>
+struct impl_round_down : public impl_round_down<OutputType, double> {};
 
 /// Also known as the floor-function.
 template<typename OutputType, typename InputType>
@@ -608,14 +629,31 @@ RoundDown(InputType Value)
 //
 // RoundUp
 //
-template<typename OutputType, typename InputType> struct impl_round_up
+template<typename OutputType, typename InputType>
+struct impl_round_up;
+
+template<typename OutputType>
+struct impl_round_up<OutputType, float>
 {
   static inline OutputType
-  Do(InputType Value)
+  Do(float Value)
   {
-    return Convert<OutputType>(std::ceil(Value));
+    return Convert<OutputType>(::ceilf(Value));
   }
 };
+
+template<typename OutputType>
+struct impl_round_up<OutputType, double>
+{
+  static inline OutputType
+  Do(double Value)
+  {
+    return Convert<OutputType>(::ceil(Value));
+  }
+};
+
+template<typename OutputType, typename InputType>
+struct impl_round_up : public impl_round_up<OutputType, double> {};
 
 /// Also known as the ceil-function.
 template<typename OutputType, typename InputType>
@@ -814,7 +852,7 @@ struct impl_defer
 #if !defined(MTB_IMPL_mtb_common)
 #define MTB_IMPL_mtb_common
 
-#include <cmath>
+#include <math.h>
 
 void mtb::
 operator +=(memory_size& A, memory_size B)
@@ -843,37 +881,37 @@ operator /=(memory_size& A, u64 Scale)
 float mtb::
 Pow(float Base, float Exponent)
 {
-  return std::pow(Base, Exponent);
+  return powf(Base, Exponent);
 }
 
 double mtb::
 Pow(double Base, double Exponent)
 {
-  return std::pow(Base, Exponent);
-}
-
-double mtb::
-Mod(double Value, double Divisor)
-{
-  return std::fmod(Value, Divisor);
+  return pow(Base, Exponent);
 }
 
 float mtb::
 Mod(float Value, float Divisor)
 {
-  return std::fmod(Value, Divisor);
+  return fmodf(Value, Divisor);
 }
 
 double mtb::
-Sqrt(double Value)
+Mod(double Value, double Divisor)
 {
-  return std::sqrt(Value);
+  return fmod(Value, Divisor);
 }
 
 float mtb::
 Sqrt(float Value)
 {
-  return std::sqrt(Value);
+  return sqrtf(Value);
+}
+
+double mtb::
+Sqrt(double Value)
+{
+  return sqrt(Value);
 }
 
 float mtb::

@@ -45,7 +45,7 @@ def make_mtb_memory(codeDir):
   mtbContent = make_mtb_common(codeDir)
   assertContent = make_mtb_assert(codeDir)
   memoryContent = (codeDir / 'mtb_memory.hpp').read_text()
-  memoryContent = remove_includes(memoryContent, 'mtb.hpp', 'mtb_assert.hpp')
+  memoryContent = remove_includes(memoryContent, 'mtb_common.hpp', 'mtb_assert.hpp')
   return '{}\n\n{}\n\n{}'.format(mtbContent, assertContent, memoryContent)
 
 
