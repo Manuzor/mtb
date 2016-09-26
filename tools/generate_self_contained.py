@@ -57,7 +57,7 @@ def dispatch(name, codeDir):
     return make_mtb_memory(codeDir)
   else:
     if not name in makerRegistry:
-      print("Unknown:", name, file=sys.error)
+      print("Unknown:", name, file=sys.stderr)
       sys.exit(1)
 
     make = makerRegistry[name]
@@ -72,6 +72,7 @@ if __name__ == '__main__':
   parser.add_argument('mtbName',
                       nargs='?',
                       default='all',
+                      choices=['all'] + list(makerRegistry.keys()),
                       help='The name of the library to create a self-contained version of.')
   parser.add_argument('--code-dir', dest='codeDir',
                       type=Path,
