@@ -481,24 +481,24 @@ AsPtrToConst(T* Value)
   return const_cast<T const*>(Value);
 }
 
-template<typename ToType, typename FromType>
+template<typename DestT, typename SourceT>
 struct impl_convert
 {
-  static constexpr ToType
-  Do(FromType const& Value)
+  static constexpr DestT
+  Do(SourceT const& Value)
   {
-    return Cast<ToType>(Value);
+    return Cast<DestT>(Value);
   }
 };
 
-template<typename ToType, typename FromType, typename... ExtraTypes>
-ToType
-Convert(FromType const& From, ExtraTypes&&... Extra)
+template<typename DestT, typename SourceT, typename... ExtraTypes>
+decltype(auto)
+Convert(SourceT const& ToConvert, ExtraTypes&&... Extra)
 {
-  using UnqualifiedToType   = rm_ref_const<ToType>;
-  using UnqualifiedFromType = rm_ref_const<FromType>;
-  using Impl = impl_convert<UnqualifiedToType, UnqualifiedFromType>;
-  return Impl::Do(From, Forward<ExtraTypes>(Extra)...);
+  using UnqualifiedDestT   = rm_ref_const<DestT>;
+  using UnqualifiedSourceT = rm_ref_const<SourceT>;
+  using Impl = impl_convert<UnqualifiedDestT, UnqualifiedSourceT>;
+  return Impl::Do(ToConvert, Forward<ExtraTypes>(Extra)...);
 }
 
 /// Asserts on overflows and underflows when converting signed or unsigned
