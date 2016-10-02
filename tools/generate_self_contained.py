@@ -68,20 +68,32 @@ def dispatch(name, codeDir):
 # Main
 #
 if __name__ == '__main__':
+  thisFilePath = Path(__file__).resolve()
+  repoDir = thisFilePath.parent.parent
+
   parser = argparse.ArgumentParser()
   parser.add_argument('mtbName',
                       nargs='?',
                       default='all',
                       choices=['all'] + list(makerRegistry.keys()),
                       help='The name of the library to create a self-contained version of.')
+  parser.add_argument('-o', '--outfile', dest='outfile',
+                      type=Path,
+                      default=Path('-'),
+                      help='The output file.')
   parser.add_argument('--code-dir', dest='codeDir',
                       type=Path,
-                      default=(Path(__file__).parent.parent / "code"),
+                      default=(repoDir / "code"),
                       help='The directory of the mtb source code.')
 
   args = parser.parse_args()
   name = args.mtbName
+  outFileName = args.outfile
   codeDir = args.codeDir.resolve()
   content = dispatch(name, codeDir)
 
-  print(content, file=sys.stdout)
+  outFile = sys.stdout
+  if str(outFileName) != '-':
+    outFile = outFileName.open('w')
+
+  print(content, file=outFile)
