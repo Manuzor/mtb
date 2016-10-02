@@ -90,12 +90,12 @@ TEST_CASE("Length of static arrays", "[Common]")
   SECTION("POD array")
   {
     int Array[42];
-    REQUIRE(Length(Array) == 42);
+    REQUIRE(LengthOf(Array) == 42);
   }
 
   SECTION("String literal")
   {
-    REQUIRE(Length("Foo") == 3 + 1);
+    REQUIRE(LengthOf("Foo") == 3 + 1);
   }
 }
 
@@ -110,23 +110,23 @@ TEST_CASE("Mem offsets", "[Common]")
 
   SECTION("Byte offset")
   {
-    REQUIRE(MemAddByteOffset(Foo,  2) == (i32*)( (char*)&Data + 2 ));
-    REQUIRE(MemAddByteOffset(Foo, -2) == (i32*)( (char*)&Data - 2 ));
+    REQUIRE(AddByteOffset(Foo,  2) == (i32*)( (char*)&Data + 2 ));
+    REQUIRE(AddByteOffset(Foo, -2) == (i32*)( (char*)&Data - 2 ));
 
-    REQUIRE(MemAddByteOffset(Bar,  2) == (char*)&Data + 2);
-    REQUIRE(MemAddByteOffset(Bar, -2) == (char*)&Data - 2);
+    REQUIRE(AddByteOffset(Bar,  2) == (char*)&Data + 2);
+    REQUIRE(AddByteOffset(Bar, -2) == (char*)&Data - 2);
 
-    REQUIRE(MemAddByteOffset(Foo, -DataOffset)     == nullptr);
-    REQUIRE(MemAddByteOffset(Foo, -DataOffset - 1) == (i32*)( (char*)nullptr - 1 ));
+    REQUIRE(AddByteOffset(Foo, -DataOffset)     == nullptr);
+    REQUIRE(AddByteOffset(Foo, -DataOffset - 1) == (i32*)( (char*)nullptr - 1 ));
   }
 
   SECTION("Sized offset")
   {
-    REQUIRE(MemAddOffset(Foo,  2) == Foo + 2);
-    REQUIRE(MemAddOffset(Foo, -2) == Foo - 2);
+    REQUIRE(AddElementOffset(Foo,  2) == Foo + 2);
+    REQUIRE(AddElementOffset(Foo, -2) == Foo - 2);
 
-    REQUIRE(MemAddOffset(Bar,  2) == (char*)Bar + 2);
-    REQUIRE(MemAddOffset(Bar, -2) == (char*)Bar - 2);
+    REQUIRE(AddElementOffset(Bar,  2) == (char*)Bar + 2);
+    REQUIRE(AddElementOffset(Bar, -2) == (char*)Bar - 2);
   }
 }
 

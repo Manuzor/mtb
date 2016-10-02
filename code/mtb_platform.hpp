@@ -182,6 +182,14 @@
   #endif
 #endif
 
+#if !defined(MTB_Internal)
+  #if defined(MTB_ReleaseBuild)
+    #define MTB_Internal MTB_Off
+  #else
+    #define MTB_Internal MTB_On
+  #endif
+#endif
+
 // Macro to enclose code that is only compiled in in debug builds.
 //
 // Usage:
@@ -201,6 +209,19 @@
   #else
     #define MTB_DebugBreak MTB_NOP
   #endif
+#endif
+
+#if !defined(MTB_Exceptions)
+  #define MTB_Exceptions MTB_Off
+#endif
+
+// For STL
+// NOTE: Don't undef to inform the user that we're overwriting their settings
+// if they specified it.
+#if MTB_IsOn(MTB_Exceptions)
+  #define _HAS_EXCEPTIONS 1
+#else
+  #define _HAS_EXCEPTIONS 0
 #endif
 
 

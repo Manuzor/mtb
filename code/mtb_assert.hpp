@@ -1,12 +1,12 @@
 #if !defined(MTB_HEADER_mtb_assert)
 #define MTB_HEADER_mtb_assert
 
-#if defined(MTB_IMPLEMENTATION)
+#if defined(MTB_IMPLEMENTATION) && !defined(MTB_ASSERT_IMPLEMENTATION)
   #define MTB_ASSERT_IMPLEMENTATION
 #endif
 
-#if defined(MTB_ASSERT_IMPLEMENTATION) && !defined(MTB_COMMON_IMPLEMENTATION)
-  #define MTB_COMMON_IMPLEMENTATION
+#if defined(MTB_ASSERT_IMPLEMENTATION) && !defined(MTB_IMPLEMENTATION)
+  #define MTB_IMPLEMENTATION
 #endif
 
 #include "mtb_common.hpp"
@@ -18,7 +18,7 @@ using assert_handler = bool(*)(
   char const* FileName,     //< The name of the file where the assert is.
   size_t      Line,         //< The line number in the file where the assert is.
   char const* FunctionName, //< The name of the function where the assert is.
-  char const* Expression,   //< The condition as captured by the MTB_Assert macro.
+  char const* Expression,   //< The condition as captured by the MTB_Assert macro. May be nullptr in case of MTB_ReportError.
   char const* Message);     //< The user defined message.
 
 assert_handler GetAssertHandler();
@@ -42,7 +42,7 @@ bool OnFailedCheck(
     { \
       if(!(CONDITION)) \
       { \
-        if(mtb_OnFailedCheck(MTB_File, MTB_Line, MTB_Function, #CONDITION, __VA_ARGS__)) \
+        if(::mtb::OnFailedCheck(MTB_File, MTB_Line, MTB_Function, #CONDITION, __VA_ARGS__)) \
         { \
           MTB_DebugBreak; \
         } \
@@ -54,6 +54,10 @@ bool OnFailedCheck(
 //
 // Find sensible defaults if the user did not set anything.
 //
+#if !defined(MTB_WantBoundsCheck)
+  #define MTB_WantBoundsCheck MTB_On
+#endif
+
 #if !defined(MTB_WantDebugAssert)
   #if MTB_IsOn(MTB_DebugBuild)
     #define MTB_WantDebugAssert MTB_On
@@ -63,7 +67,7 @@ bool OnFailedCheck(
 #endif
 
 #if !defined(MTB_WantDevAssert)
-  #if MTB_IsOn(MTB_DevBuild)
+  #if MTB_IsOn(MTB_DebugBuild) || MTB_IsOn(MTB_DevBuild)
     #define MTB_WantDevAssert MTB_On
   #else
     #define MTB_WantDevAssert MTB_Off
@@ -71,7 +75,7 @@ bool OnFailedCheck(
 #endif
 
 #if !defined(MTB_WantReleaseAssert)
-  #if MTB_IsOn(MTB_ReleaseBuild)
+  #if MTB_IsOn(MTB_DebugBuild) || MTB_IsOn(MTB_DevBuild) || MTB_IsOn(MTB_ReleaseBuild)
     #define MTB_WantReleaseAssert MTB_On
   #else
     #define MTB_WantReleaseAssert MTB_Off
@@ -82,6 +86,10 @@ bool OnFailedCheck(
 //
 // Define the actual assert macros
 //
+#if MTB_IsOn(MTB_WantBoundsCheck)
+  #define MTB_BoundsCheck MTB_Require
+#endif
+
 #if MTB_IsOn(MTB_WantDebugAssert)
   #define MTB_DebugAssert MTB_Require
 #endif
@@ -92,6 +100,20 @@ bool OnFailedCheck(
 
 #if MTB_IsOn(MTB_WantReleaseAssert)
   #define MTB_ReleaseAssert MTB_Require
+#endif
+
+//
+// Error reporting macro to mark an invalid code path.
+//
+#if !defined(MTB_ReportError)
+  #define MTB_ReportError(...) \
+    do \
+    { \
+      if(::mtb::OnFailedCheck(MTB_File, MTB_Line, MTB_Function, nullptr, __VA_ARGS__)) \
+      { \
+        MTB_DebugBreak; \
+      } \
+    } while(0)
 #endif
 
 

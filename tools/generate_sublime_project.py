@@ -26,7 +26,7 @@ def main(destFilePath):
           "name": "Tests: Build and Run",
           "windows":
           {
-            "cmd": [ "{}/tests/build.bat".format(repoDir) ],
+            "cmd": [ "{}/tests/build.bat".format(repoDir), "run" ],
           },
         }
       ]

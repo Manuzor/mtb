@@ -1,20 +1,18 @@
-#if !defined(MTB_HEADER_memory)
-#define MTB_HEADER_memory
+#if !defined(MTB_HEADER_mtb_memory)
+#define MTB_HEADER_mtb_memory
 
-#if defined(MTB_IMPLEMENTATION)
+#if defined(MTB_IMPLEMENTATION) && !defined(MTB_MEMORY_IMPLEMENTATION)
   #define MTB_MEMORY_IMPLEMENTATION
 #endif
 
-#if defined(MTB_MEMORY_IMPLEMENTATION) && !defined(MTB_COMMON_IMPLEMENTATION)
-  #define MTB_COMMON_IMPLEMENTATION
-#endif
-
-#if defined(MTB_MEMORY_IMPLEMENTATION) && !defined(MTB_ASSERT_IMPLEMENTATION)
-  #define MTB_ASSERT_IMPLEMENTATION
+#if defined(MTB_MEMORY_IMPLEMENTATION) && !defined(MTB_IMPLEMENTATION)
+  #define MTB_IMPLEMENTATION
 #endif
 
 #include "mtb_common.hpp"
 #include "mtb_assert.hpp"
+
+#include <new>
 
 namespace mtb
 {
@@ -27,11 +25,11 @@ namespace mtb
 /// which C standard functionality is covered by which of the functions
 /// defined here.
 ///
-/// C Standard Function | Untyped/Bytes                           | Typed
-/// ------------------- | --------------------------------------- | -----
-/// memcopy, memmove    | MemCopyBytes                        | MemCopy, MemCopyConstruct, MemMove, MemMoveConstruct
-/// memset              | MemSetBytes                         | MemSet, MemConstruct
-/// memcmp              | MemCompareBytes, MemEqualBytes  | -
+/// C Standard Function | Untyped/Bytes                | Typed
+/// ------------------- | ---------------------------- | -----
+/// memcopy, memmove    | CopyBytes                    | CopyElements, CopyConstructElements, MoveElements, MoveConstructElements
+/// memset              | SetBytes                     | SetElements, ConstructElements
+/// memcmp              | CompareBytes, AreBytesEqual  | -
 ///
 ///
 /// All functions are optimized for POD types.
@@ -42,20 +40,17 @@ namespace mtb
 ///
 /// Destination and Source may overlap.
 void
-MemCopyBytes(memory_size Size, void* Destination, void const* Source);
+CopyBytes(memory_size Size, void* Destination, void const* Source);
 
 /// Fill NumBytes in Destination with the value
 void
-MemSetBytes(memory_size Size, void* Destination, int Value);
+SetBytes(memory_size Size, void* Destination, int Value);
 
 bool
-MemEqualBytes(memory_size Size, void const* A, void const* B);
+AreBytesEqual(memory_size Size, void const* A, void const* B);
 
 int
-MemCompareBytes(memory_size Size, void const* A, void const* B);
-
-bool
-MemAreOverlappingBytes(memory_size SizeA, void const* A, memory_size SizeB, void const* B);
+CompareBytes(memory_size Size, void const* A, void const* B);
 
 
 /// Calls the constructor of all elements in Destination with Args.
@@ -63,19 +58,19 @@ MemAreOverlappingBytes(memory_size SizeA, void const* A, memory_size SizeB, void
 /// Args may be empty in which case all elements get default-initialized.
 template<typename T, typename... ArgTypes>
 void
-MemConstruct(size_t Num, T* Destination, ArgTypes&&... Args);
+ConstructElements(size_t Num, T* Destination, ArgTypes&&... Args);
 
 /// Destructs all elements in Destination.
 template<typename T>
 void
-MemDestruct(size_t Num, T* Destination);
+DestructElements(size_t Num, T* Destination);
 
 /// Copy all elements from Source to Destination.
 ///
 /// Destination and Source may overlap.
 template<typename T>
 void
-MemCopy(size_t Num, T* Destination, T const* Source);
+CopyElements(size_t Num, T* Destination, T const* Source);
 
 /// Copy all elements from Source to Destination using T's constructor.
 ///
@@ -83,14 +78,14 @@ MemCopy(size_t Num, T* Destination, T const* Source);
 /// uninitialized.
 template<typename T>
 void
-MemCopyConstruct(size_t Num, T* Destination, T const* Source);
+CopyConstructElements(size_t Num, T* Destination, T const* Source);
 
 /// Move all elements from Source to Destination using T's constructor.
 ///
 /// Destination and Source may overlap.
 template<typename T>
 void
-MemMove(size_t Num, T* Destination, T* Source);
+MoveElements(size_t Num, T* Destination, T* Source);
 
 /// Move all elements from Source to Destination using T's constructor and destruct Source afterwards.
 ///
@@ -98,24 +93,27 @@ MemMove(size_t Num, T* Destination, T* Source);
 /// uninitialized.
 template<typename T>
 void
-MemMoveConstruct(size_t Num, T* Destination, T* Source);
+MoveConstructElements(size_t Num, T* Destination, T* Source);
 
 /// Assign the default value of T to all elements in Destination.
 template<typename T>
 void
-MemSet(size_t Num, T* Destination);
+SetElementsToDefault(size_t Num, T* Destination);
 
 /// Assign Item to all elements in Destination.
 template<typename T>
 void
-MemSet(size_t Num, T* Destination, T const& Item);
+SetElements(size_t Num, T* Destination, T const& Item);
+
+bool
+ImplTestMemoryOverlap(memory_size SizeA, void const* A, memory_size SizeB, void const* B);
 
 template<typename TA, typename TB>
 bool
-MemAreOverlapping(size_t NumA, TA const* A, size_t NumB, TB const* B)
+TestMemoryOverlap(size_t NumA, TA const* A, size_t NumB, TB const* B)
 {
-  return MemAreOverlappingBytes(NumA * SizeOf<TA>(), Reinterpret<void const*>(A),
-                                NumB * SizeOf<TB>(), Reinterpret<void const*>(B));
+  return ImplTestMemoryOverlap(NumA * SizeOf<TA>(), Reinterpret<void const*>(A),
+                               NumB * SizeOf<TB>(), Reinterpret<void const*>(B));
 }
 
 
@@ -123,10 +121,10 @@ MemAreOverlapping(size_t NumA, TA const* A, size_t NumB, TB const* B)
 // Implementation Details
 //
 
-// MemConstruct
+// ConstructElements
 
 template<typename T, bool TIsPlainOldData = false>
-struct impl_mem_construct
+struct impl_construct_elements
 {
   template<typename... ArgTypes>
   MTB_Inline static void
@@ -140,12 +138,12 @@ struct impl_mem_construct
 };
 
 template<typename T>
-struct impl_mem_construct<T, true>
+struct impl_construct_elements<T, true>
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination)
   {
-    MemSetBytes(Num * SizeOf<T>(), Destination, 0);
+    SetBytes(Num * SizeOf<T>(), Destination, 0);
   }
 
   MTB_Inline static void
@@ -154,24 +152,24 @@ struct impl_mem_construct<T, true>
     // Blit Item over each element of Destination.
     for(size_t Index = 0; Index < Num; ++Index)
     {
-      MemCopyBytes(SizeOf<T>(), &Destination[Index], &Item);
+      CopyBytes(SizeOf<T>(), &Destination[Index], &Item);
     }
   }
 };
 
 template<typename T, typename... ArgTypes>
 MTB_Inline auto
-MemConstruct(size_t Num, T* Destination, ArgTypes&&... Args)
+ConstructElements(size_t Num, T* Destination, ArgTypes&&... Args)
   -> void
 {
-  impl_mem_construct<T, IsPOD<T>()>::Do(Num, Destination, Forward<ArgTypes>(Args)...);
+  impl_construct_elements<T, IsPOD<T>()>::Do(Num, Destination, Forward<ArgTypes>(Args)...);
 }
 
 
-// MemDestruct
+// DestructElements
 
 template<typename T, bool TIsPlainOldData = false>
-struct impl_mem_destruct
+struct impl_destruct_elements
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination)
@@ -184,7 +182,7 @@ struct impl_mem_destruct
 };
 
 template<typename T>
-struct impl_mem_destruct<T, true>
+struct impl_destruct_elements<T, true>
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination)
@@ -195,17 +193,17 @@ struct impl_mem_destruct<T, true>
 
 template<typename T>
 MTB_Inline auto
-MemDestruct(size_t Num, T* Destination)
+DestructElements(size_t Num, T* Destination)
   -> void
 {
-  impl_mem_destruct<T, IsPOD<T>()>::Do(Num, Destination);
+  impl_destruct_elements<T, IsPOD<T>()>::Do(Num, Destination);
 }
 
 
-// MemCopy
+// CopyElements
 
 template<typename T, bool TIsPlainOldData = false>
-struct impl_mem_copy
+struct impl_copy_elements
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination, T const* Source)
@@ -213,7 +211,7 @@ struct impl_mem_copy
     if(Destination == Source)
       return;
 
-    if(MemAreOverlapping(Num, Destination, Num, Source) && Destination < Source)
+    if(TestMemoryOverlap(Num, Destination, Num, Source) && Destination < Source)
     {
       // Copy backwards.
       for(size_t Index = Num; Index > 0;)
@@ -234,34 +232,34 @@ struct impl_mem_copy
 };
 
 template<typename T>
-struct impl_mem_copy<T, true>
+struct impl_copy_elements<T, true>
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination, T const* Source)
   {
-    MemCopyBytes(SizeOf<T>() * Num, Destination, Source);
+    CopyBytes(SizeOf<T>() * Num, Destination, Source);
   }
 };
 
 template<typename T>
 MTB_Inline auto
-MemCopy(size_t Num, T* Destination, T const* Source)
+CopyElements(size_t Num, T* Destination, T const* Source)
   -> void
 {
-  impl_mem_copy<T, IsPOD<T>()>::Do(Num, Destination, Source);
+  impl_copy_elements<T, IsPOD<T>()>::Do(Num, Destination, Source);
 }
 
 
-// MemCopyConstruct
+// CopyConstructElements
 
 template<typename T, bool TIsPlainOldData = false>
-struct impl_mem_copy_construct
+struct impl_copy_construct_elements
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination, T const* Source)
   {
     // When using the constructor, overlapping is not allowed.
-    MTB_DebugAssert(!MemAreOverlapping(Num, Destination, Num, Source));
+    MTB_DebugAssert(!TestMemoryOverlap(Num, Destination, Num, Source));
 
     for(size_t Index = 0; Index < Num; ++Index)
     {
@@ -271,7 +269,7 @@ struct impl_mem_copy_construct
 };
 
 template<typename T>
-struct impl_mem_copy_construct<T, true>
+struct impl_copy_construct_elements<T, true>
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination, T const* Source)
@@ -279,25 +277,25 @@ struct impl_mem_copy_construct<T, true>
     // When using the constructor, overlapping is not allowed. Even though in
     // the POD case here it doesn't make a difference, it might help to catch
     // bugs since this can't be intentional.
-    MTB_DebugAssert(!MemAreOverlapping(Num, Destination, Num, Source));
+    MTB_DebugAssert(!TestMemoryOverlap(Num, Destination, Num, Source));
 
-    MemCopy(Num, Destination, Source);
+    CopyElements(Num, Destination, Source);
   }
 };
 
 template<typename T>
 MTB_Inline auto
-MemCopyConstruct(size_t Num, T* Destination, T const* Source)
+CopyConstructElements(size_t Num, T* Destination, T const* Source)
   -> void
 {
-  impl_mem_copy_construct<T, IsPOD<T>()>::Do(Num, Destination, Source);
+  impl_copy_construct_elements<T, IsPOD<T>()>::Do(Num, Destination, Source);
 }
 
 
-// MemMove
+// MoveElements
 
 template<typename T, bool TIsPlainOldData = false>
-struct impl_mem_move
+struct impl_move_elements
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination, T* Source)
@@ -305,7 +303,7 @@ struct impl_mem_move
     if(Destination == Source)
       return;
 
-    if(MemAreOverlapping(Num, Destination, Num, Source))
+    if(TestMemoryOverlap(Num, Destination, Num, Source))
     {
       if(Destination < Source)
       {
@@ -317,7 +315,7 @@ struct impl_mem_move
 
         // Destroy the remaining elements in the back.
         size_t const NumToDestruct = Source - Destination;
-        MemDestruct(NumToDestruct, MemAddOffset(Source, Num - NumToDestruct));
+        DestructElements(NumToDestruct, AddElementOffset(Source, Num - NumToDestruct));
       }
       else
       {
@@ -330,7 +328,7 @@ struct impl_mem_move
 
         // Destroy the remaining elements in the front.
         size_t const NumToDestruct = Destination - Source;
-        MemDestruct(NumToDestruct, Source);
+        DestructElements(NumToDestruct, Source);
       }
     }
     else
@@ -340,44 +338,44 @@ struct impl_mem_move
       {
         Destination[Index] = Move(Source[Index]);
       }
-      MemDestruct(Num, Source);
+      DestructElements(Num, Source);
     }
   }
 };
 
 template<typename T>
-struct impl_mem_move<T, true> : public impl_mem_copy<T, true> {};
+struct impl_move_elements<T, true> : public impl_copy_elements<T, true> {};
 
 template<typename T>
 MTB_Inline auto
-MemMove(size_t Num, T* Destination, T* Source)
+MoveElements(size_t Num, T* Destination, T* Source)
   -> void
 {
-  impl_mem_move<T, IsPOD<T>()>::Do(Num, Destination, Source);
+  impl_move_elements<T, IsPOD<T>()>::Do(Num, Destination, Source);
 }
 
 
-// MemMoveConstruct
+// MoveConstructElements
 
 template<typename T, bool TIsPlainOldData = false>
-struct impl_mem_move_construct
+struct impl_move_construct_elements
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination, T* Source)
   {
     // When using the constructor, overlapping is not allowed.
-    MTB_DebugAssert(!MemAreOverlapping(Num, Destination, Num, Source));
+    MTB_DebugAssert(!TestMemoryOverlap(Num, Destination, Num, Source));
 
     for(size_t Index = 0; Index < Num; ++Index)
     {
       new (&Destination[Index]) T(Move(Source[Index]));
     }
-    MemDestruct(Num, Source);
+    DestructElements(Num, Source);
   }
 };
 
 template<typename T>
-struct impl_mem_move_construct<T, true>
+struct impl_move_construct_elements<T, true>
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination, T const* Source)
@@ -385,25 +383,25 @@ struct impl_mem_move_construct<T, true>
     // When using the constructor, overlapping is not allowed. Even though in
     // the POD case here it doesn't make a difference, it might help to catch
     // bugs since this can't be intentional.
-    MTB_DebugAssert(!MemAreOverlapping(Num, Destination, Num, Source));
+    MTB_DebugAssert(!TestMemoryOverlap(Num, Destination, Num, Source));
 
-    MemCopy(Num, Destination, Source);
+    CopyElements(Num, Destination, Source);
   }
 };
 
 template<typename T>
 MTB_Inline auto
-MemMoveConstruct(size_t Num, T* Destination, T* Source)
+MoveConstructElements(size_t Num, T* Destination, T* Source)
   -> void
 {
-  impl_mem_move_construct<T, IsPOD<T>()>::Do(Num, Destination, Source);
+  impl_move_construct_elements<T, IsPOD<T>()>::Do(Num, Destination, Source);
 }
 
 
-// MemSet
+// SetElements
 
 template<typename T, bool TIsPlainOldData = false>
-struct impl_mem_set
+struct impl_set_elements
 {
   MTB_Inline static void
   Do(size_t Num, T* Destination)
@@ -425,36 +423,36 @@ struct impl_mem_set
 };
 
 template<typename T>
-struct impl_mem_set<T, true> : public impl_mem_construct<T, true> {};
+struct impl_set_elements<T, true> : public impl_construct_elements<T, true> {};
 
 template<typename T>
 MTB_Inline auto
-MemSet(size_t Num, T* Destination)
+SetElements(size_t Num, T* Destination)
   -> void
 {
-  impl_mem_set<T, IsPOD<T>()>::Do(Num, Destination);
+  impl_set_elements<T, IsPOD<T>()>::Do(Num, Destination);
 }
 
 template<typename T>
 MTB_Inline auto
-MemSet(size_t Num, T* Destination, T const& Item)
+SetElements(size_t Num, T* Destination, T const& Item)
   -> void
 {
-  impl_mem_set<T, IsPOD<T>()>::Do(Num, Destination, Item);
+  impl_set_elements<T, IsPOD<T>()>::Do(Num, Destination, Item);
 }
 
 } // namespace mtb
-#endif // !defined(MTB_HEADER_memory)
+#endif // !defined(MTB_HEADER_mtb_memory)
 
 #if defined(MTB_MEMORY_IMPLEMENTATION)
 
-#if !defined(MTB_IMPL_memory)
-#define MTB_IMPL_memory
+#if !defined(MTB_IMPL_mtb_memory)
+#define MTB_IMPL_mtb_memory
 
 #include <cstring>
 
 auto mtb::
-MemCopyBytes(memory_size Size, void* Destination, void const* Source)
+CopyBytes(memory_size Size, void* Destination, void const* Source)
   -> void
 {
   // Using memmove so that Destination and Source may overlap.
@@ -462,28 +460,28 @@ MemCopyBytes(memory_size Size, void* Destination, void const* Source)
 }
 
 auto mtb::
-MemSetBytes(memory_size Size, void* Destination, int Value)
+SetBytes(memory_size Size, void* Destination, int Value)
   -> void
 {
   std::memset(Destination, Value, ToBytes(Size));
 }
 
 auto mtb::
-MemEqualBytes(memory_size Size, void const* A, void const* B)
+AreBytesEqual(memory_size Size, void const* A, void const* B)
   -> bool
 {
-  return MemCompareBytes(Size, A, B) == 0;
+  return CompareBytes(Size, A, B) == 0;
 }
 
 auto mtb::
-MemCompareBytes(memory_size Size, void const* A, void const* B)
+CompareBytes(memory_size Size, void const* A, void const* B)
   -> int
 {
   return std::memcmp(A, B, ToBytes(Size));
 }
 
 auto mtb::
-MemAreOverlappingBytes(memory_size SizeA, void const* A, memory_size SizeB, void const* B)
+ImplTestMemoryOverlap(memory_size SizeA, void const* A, memory_size SizeB, void const* B)
   -> bool
 {
   auto LeftA = Reinterpret<size_t const>(A);
@@ -498,5 +496,5 @@ MemAreOverlappingBytes(memory_size SizeA, void const* A, memory_size SizeB, void
          RightA >= LeftB && RightA <= RightB;   // Check if RightA is in [B, B+SizeB]
 }
 
-#endif // !defiend(MTB_IMPL_memory)
+#endif // !defiend(MTB_IMPL_mtb_memory)
 #endif // defined(MTB_MEMORY_IMPLEMENTATION)

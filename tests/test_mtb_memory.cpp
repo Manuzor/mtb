@@ -36,7 +36,7 @@ TEST_CASE("Memory Construction", "[Memory]")
 
     SECTION("Default construct array")
     {
-      MemConstruct(Length(Pods), Pods);
+      ConstructElements(LengthOf(Pods), Pods);
       REQUIRE( Pods[0] == 0 );
       REQUIRE( Pods[1] == 0 );
       REQUIRE( Pods[2] == 0 );
@@ -45,7 +45,7 @@ TEST_CASE("Memory Construction", "[Memory]")
 
     SECTION("Construct array with value")
     {
-      MemConstruct(Length(Pods), Pods, 42);
+      ConstructElements(LengthOf(Pods), Pods, 42);
       REQUIRE( Pods[0] == 42 );
       REQUIRE( Pods[1] == 42 );
       REQUIRE( Pods[2] == 42 );
@@ -53,7 +53,7 @@ TEST_CASE("Memory Construction", "[Memory]")
 
       SECTION("Destruct array")
       {
-        MemDestruct(Length(Pods), Pods);
+        DestructElements(LengthOf(Pods), Pods);
         // Should not do anything for PODs.
         REQUIRE( Pods[0] == 42 );
         REQUIRE( Pods[1] == 42 );
@@ -89,30 +89,30 @@ TEST_CASE("Memory Construction", "[Memory]")
 
 
     foo Foos[4];
-    REQUIRE( Counters->Ctor == 1 * Convert<int>(Length(Foos)) );
-    REQUIRE( Counters->Dtor == 0 * Convert<int>(Length(Foos)) );
+    REQUIRE( Counters->Ctor == 1 * Convert<int>(LengthOf(Foos)) );
+    REQUIRE( Counters->Dtor == 0 * Convert<int>(LengthOf(Foos)) );
 
-    MemSetBytes(Bytes(Length(Foos) * SizeOf<foo>()), Foos, 0);
+    SetBytes(Bytes(LengthOf(Foos) * SizeOf<foo>()), Foos, 0);
 
-    MemConstruct(Length(Foos), Foos);
-    REQUIRE( Counters->Ctor == 2 * Convert<int>(Length(Foos)) );
-    REQUIRE( Counters->Dtor == 0 * Convert<int>(Length(Foos)) );
+    ConstructElements(LengthOf(Foos), Foos);
+    REQUIRE( Counters->Ctor == 2 * Convert<int>(LengthOf(Foos)) );
+    REQUIRE( Counters->Dtor == 0 * Convert<int>(LengthOf(Foos)) );
     REQUIRE( Foos[0].Data == 0 );
     REQUIRE( Foos[1].Data == 0 );
     REQUIRE( Foos[2].Data == 0 );
     REQUIRE( Foos[3].Data == 0 );
 
-    MemConstruct(Length(Foos), Foos, u8(42));
-    REQUIRE( Counters->Ctor == 3 * Convert<int>(Length(Foos)) );
-    REQUIRE( Counters->Dtor == 0 * Convert<int>(Length(Foos)) );
+    ConstructElements(LengthOf(Foos), Foos, u8(42));
+    REQUIRE( Counters->Ctor == 3 * Convert<int>(LengthOf(Foos)) );
+    REQUIRE( Counters->Dtor == 0 * Convert<int>(LengthOf(Foos)) );
     REQUIRE( Foos[0].Data == 42 );
     REQUIRE( Foos[1].Data == 42 );
     REQUIRE( Foos[2].Data == 42 );
     REQUIRE( Foos[3].Data == 42 );
 
-    MemDestruct(Length(Foos), Foos);
-    REQUIRE( Counters->Ctor == 3 * Convert<int>(Length(Foos)) );
-    REQUIRE( Counters->Dtor == 1 * Convert<int>(Length(Foos)) );
+    DestructElements(LengthOf(Foos), Foos);
+    REQUIRE( Counters->Ctor == 3 * Convert<int>(LengthOf(Foos)) );
+    REQUIRE( Counters->Dtor == 1 * Convert<int>(LengthOf(Foos)) );
     REQUIRE( Foos[0].Data == 42 );
     REQUIRE( Foos[1].Data == 42 );
     REQUIRE( Foos[2].Data == 42 );
@@ -134,7 +134,7 @@ TEST_CASE("Memory Relocation", "[Memory]")
       auto A = &Ints[0];
       auto B = &Ints[Num];
 
-      MemMove(Num, A, B);
+      MoveElements(Num, A, B);
       REQUIRE( Ints[0] == 3 );
       REQUIRE( Ints[1] == 4 );
       REQUIRE( Ints[2] == 5 );
@@ -146,7 +146,7 @@ TEST_CASE("Memory Relocation", "[Memory]")
       size_t Num = 3;
       auto A = &Ints[0];
       auto B = &Ints[2];
-      MemMove(Num, A, B);
+      MoveElements(Num, A, B);
       REQUIRE( Ints[0] == 2 );
       REQUIRE( Ints[1] == 3 );
       REQUIRE( Ints[2] == 4 );
@@ -185,7 +185,7 @@ TEST_CASE("Memory Relocation", "[Memory]")
       size_t Num = 3;
       auto A = Foos;
       auto B = &Foos[Num];
-      MemMove(Num, A, B);
+      MoveElements(Num, A, B);
       REQUIRE(  Foos[0].Id == 1 );
       REQUIRE(  Foos[0].IsAlive );
       REQUIRE(  Foos[0].MovedIn == 4 );
@@ -217,7 +217,7 @@ TEST_CASE("Memory Relocation", "[Memory]")
       size_t Num = 3;
       auto A = &Foos[1];
       auto B = &Foos[3];
-      MemMove(Num, A, B);
+      MoveElements(Num, A, B);
       REQUIRE(  Foos[0].Id == 1 );
       REQUIRE(  Foos[0].IsAlive );
       REQUIRE(  Foos[0].MovedIn == 0 );

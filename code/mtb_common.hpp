@@ -1,11 +1,15 @@
 #if !defined(MTB_HEADER_mtb_common)
 #define MTB_HEADER_mtb_common
 
-#include "mtb_platform.hpp"
-
-#if defined(MTB_IMPLEMENTATION)
+#if defined(MTB_IMPLEMENTATION) && !defined(MTB_COMMON_IMPLEMENTATION)
   #define MTB_COMMON_IMPLEMENTATION
 #endif
+
+#if defined(MTB_COMMON_IMPLEMENTATION) && !defined(MTB_IMPLEMENTATION)
+  #define MTB_IMPLEMENTATION
+#endif
+
+#include "mtb_platform.hpp"
 
 namespace mtb
 {
@@ -152,11 +156,6 @@ E() { return (T)2.71828182845; }
 //
 // ================
 //
-/// Returns the number of elements in this static array.
-template<typename Type, size_t N>
-constexpr size_t
-Length(Type(&)[N]) { return N; }
-
 template<typename T> struct impl_size_of { enum { SizeInBytes = sizeof(T) }; };
 template<>           struct impl_size_of<void>          : impl_size_of<u8>          { };
 template<>           struct impl_size_of<void const>    : impl_size_of<u8 const>    { };
@@ -169,6 +168,26 @@ template<>           struct impl_size_of<void volatile> : impl_size_of<u8 volati
 template<typename T>
 constexpr memory_size
 SizeOf() { return Bytes(impl_size_of<T>::SizeInBytes); }
+
+/// Returns the number of elements in this static array.
+template<typename T, size_t N>
+constexpr size_t
+LengthOf(T(&)[N]) { return N; }
+
+/// Same as \c LengthOf but force to 32 bit value.
+template<typename T, size_t N>
+constexpr u32
+LengthOf32(T(&)[N]) { return (u32)N; }
+
+/// Returns the number of elements in this static array.
+template<typename T, size_t N>
+constexpr size_t
+ByteLengthOf(T(&)[N]) { return N * (1 / SizeOf<T>()); }
+
+/// Same as \c LengthOf but force to 32 bit value.
+template<typename T, size_t N>
+constexpr u32
+ByteLengthOf32(T(&)[N]) { return (u32)N * (1 / SizeOf<T>()); }
 
 /// Reinterpretation of the given pointer in case PointerType is `void`.
 template<typename PointerType>
@@ -202,7 +221,7 @@ NonVoidPtr(void volatile* Ptr)
 /// Advance the given pointer value by the given amount of bytes.
 template<typename PointerType, typename OffsetType>
 constexpr PointerType*
-MemAddByteOffset(PointerType* Pointer, OffsetType Offset)
+AddByteOffset(PointerType* Pointer, OffsetType Offset)
 {
   return (PointerType*)((u8*)Pointer + Offset);
 }
@@ -210,9 +229,9 @@ MemAddByteOffset(PointerType* Pointer, OffsetType Offset)
 /// Advance the given pointer value by the given amount times sizeof(PointerType)
 template<typename PointerType, typename OffsetType>
 constexpr PointerType*
-MemAddOffset(PointerType* Pointer, OffsetType Offset)
+AddElementOffset(PointerType* Pointer, OffsetType Offset)
 {
-  return MemAddByteOffset(Pointer, Offset * ToBytes(SizeOf<PointerType>()));
+  return AddByteOffset(Pointer, Offset * ToBytes(SizeOf<PointerType>()));
 }
 
 template<typename T> struct impl_is_pod
@@ -401,26 +420,26 @@ using rm_const = typename impl_rm_const<T>::Type;
 template<typename T>
 using rm_ref_const = rm_const<rm_ref<T>>;
 
-template<class Type>
-constexpr typename rm_ref<Type>&&
-Move(Type&& Argument)
+template<class T>
+constexpr typename rm_ref<T>&&
+Move(T&& Argument)
 {
   // forward Argument as movable
-  return static_cast<typename rm_ref<Type>&&>(Argument);
+  return static_cast<typename rm_ref<T>&&>(Argument);
 }
 
-template<typename Type>
-constexpr Type&&
-Forward(typename rm_ref<Type>& Argument)
+template<typename T>
+constexpr T&&
+Forward(typename rm_ref<T>& Argument)
 {
-  return static_cast<Type&&>(Argument);
+  return static_cast<T&&>(Argument);
 }
 
-template<typename Type>
-constexpr Type&&
-Forward(rm_ref<Type>&& Argument)
+template<typename T>
+constexpr T&&
+Forward(rm_ref<T>&& Argument)
 {
-  return static_cast<Type&&>(Argument);
+  return static_cast<T&&>(Argument);
 }
 
 template<typename DestType, typename SourceType>
@@ -448,18 +467,18 @@ Coerce(SourceType Value)
   return Result;
 }
 
-template<typename Type>
-Type const&
-AsConst(Type& Value)
+template<typename T>
+T const&
+AsConst(T& Value)
 {
-  return const_cast<Type const&>(Value);
+  return const_cast<T const&>(Value);
 }
 
-template<typename Type>
-Type const*
-AsPtrToConst(Type* Value)
+template<typename T>
+T const*
+AsPtrToConst(T* Value)
 {
-  return const_cast<Type const*>(Value);
+  return const_cast<T const*>(Value);
 }
 
 template<typename ToType, typename FromType>
@@ -501,11 +520,11 @@ SafeConvertInt(SrcIntegerType Value)
 }
 
 /// \return 1 for a positive number, -1 for a negative number, 0 otherwise.
-template<typename Type>
-constexpr Type
-Sign(Type I)
+template<typename T>
+constexpr T
+Sign(T I)
 {
-  return Type(I > 0 ? 1 : I < 0 ? -1 : 0);
+  return T(I > 0 ? 1 : I < 0 ? -1 : 0);
 }
 
 template<typename T> struct impl_abs { static constexpr T Do(T Value) { return Sign(Value) * Value; } };
@@ -518,40 +537,40 @@ template<> struct impl_abs<i16> { static inline i16 Do(i16 Value) { return Value
 template<> struct impl_abs<i32> { static inline i32 Do(i32 Value) { return Value < 0 ? -Value : Value; } };
 template<> struct impl_abs<i64> { static inline i64 Do(i64 Value) { return Value < 0 ? -Value : Value; } };
 
-template<typename Type>
-constexpr Type
-Abs(Type Value)
+template<typename T>
+constexpr T
+Abs(T Value)
 {
-  return impl_abs<Type>::Do(Value);
+  return impl_abs<T>::Do(Value);
 }
 
-template<typename t_a_type, typename t_b_type>
-constexpr t_a_type
-Min(t_a_type A, t_b_type B)
+template<typename TypeA, typename TypeB>
+constexpr TypeA
+Min(TypeA A, TypeB B)
 {
-  return (B < A) ? Coerce<t_a_type>(B) : A;
+  return (B < A) ? Coerce<TypeA>(B) : A;
 }
 
-template<typename t_a_type, typename t_b_type>
-constexpr t_a_type
-Max(t_a_type A, t_b_type B)
+template<typename TypeA, typename TypeB>
+constexpr TypeA
+Max(TypeA A, TypeB B)
 {
-  return (B > A) ? Coerce<t_a_type>(B) : A;
+  return (B > A) ? Coerce<TypeA>(B) : A;
 }
 
-template<typename t_value_type, typename t_lower_bound_type, typename t_upper_bound_type>
-constexpr t_value_type
-Clamp(t_value_type Value, t_lower_bound_type LowerBound, t_upper_bound_type UpperBound)
+template<typename ValueT, typename LowerBoundT, typename UpperBoundT>
+constexpr ValueT
+Clamp(ValueT Value, LowerBoundT LowerBound, UpperBoundT UpperBound)
 {
   return UpperBound < LowerBound ? Value : Min(UpperBound, Max(LowerBound, Value));
 }
 
 // TODO: Make this a constexpr?
-template<typename t_value_type, typename t_lower_bound_type, typename t_upper_bound_type>
-t_value_type
-Wrap(t_value_type Value, t_lower_bound_type LowerBound, t_upper_bound_type UpperBound)
+template<typename ValueT, typename LowerBoundT, typename UpperBoundT>
+ValueT
+Wrap(ValueT Value, LowerBoundT LowerBound, UpperBoundT UpperBound)
 {
-  const auto BoundsDelta = (Coerce<t_lower_bound_type>(UpperBound) - LowerBound);
+  const auto BoundsDelta = (Coerce<LowerBoundT>(UpperBound) - LowerBound);
   while(Value >= UpperBound) Value -= BoundsDelta;
   while(Value < LowerBound)  Value += BoundsDelta;
   return Value;
@@ -734,13 +753,13 @@ Round(InputType Value)
 // Project a value from [LowerBound, UpperBound] to [0, 1]
 // Example:
 //   auto Result = NormalizeValue<float>(15, 10, 30); // == 0.25f
-template<typename t_result, typename t_value_type, typename t_lower_bound_type, typename t_upper_bound_type>
-constexpr t_result
-NormalizeValue(t_value_type Value, t_lower_bound_type LowerBound, t_upper_bound_type UpperBound)
+template<typename ResultT, typename ValueT, typename LowerBoundT, typename UpperBoundT>
+constexpr ResultT
+NormalizeValue(ValueT Value, LowerBoundT LowerBound, UpperBoundT UpperBound)
 {
   return UpperBound <= LowerBound ?
-         t_result(0) : // Bogus bounds.
-         Cast<t_result>(Value - LowerBound) / Cast<t_result>(UpperBound - LowerBound);
+         ResultT(0) : // Bogus bounds.
+         Cast<ResultT>(Value - LowerBound) / Cast<ResultT>(UpperBound - LowerBound);
 }
 
 bool
@@ -755,13 +774,22 @@ IsNearlyZero(double A, double Epsilon = 1e-4) { return AreNearlyEqual(A, 0, Epsi
 inline bool
 IsNearlyZero(float A, float Epsilon = 1e-4f) { return AreNearlyEqual(A, 0, Epsilon); }
 
-template<typename t_a, typename t_b>
+template<typename TypeA, typename TypeB>
 inline void
-Swap(t_a& A, t_b& B)
+Swap(TypeA& A, TypeB& B)
 {
   auto Temp{ Move(A) };
   A = Move(B);
   B = Move(Temp);
+}
+
+template<typename T, typename U = T>
+inline T
+Exchange(T& Value, U&& NewValue)
+{
+  auto OldValue{ Move(Value) };
+  Value = Forward<T>(NewValue);
+  return OldValue;
 }
 
 /// Maps the given float Value from [0, 1] to [0, MaxValueOf(UNormType)]
@@ -817,8 +845,8 @@ struct impl_defer
     ~defer() { Lambda(); }
   };
 
-  template<typename t_in_func_type>
-  defer<t_in_func_type> operator =(t_in_func_type InLambda) { return { Move(InLambda) }; }
+  template<typename FuncT>
+  defer<FuncT> operator =(FuncT InLambda) { return { Move(InLambda) }; }
 };
 
 /// Defers execution of code until the end of the current scope.
