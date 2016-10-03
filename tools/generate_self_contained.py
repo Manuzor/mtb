@@ -2,67 +2,70 @@ import os, sys
 import argparse
 from pathlib import *
 
-makerRegistry = {}
 
-def maker(name):
-  def helper(func):
-    makerRegistry[name] = func
-    return func
-  return helper
+allHeaders = [
+  'mtb_platform.hpp',
+  'mtb_common.hpp',
+  'mtb_assert.hpp',
+  'mtb_memory.hpp',
+  'mtb_slice.hpp',
+  'mtb_conv.hpp',
+]
 
-def remove_includes(content, *includeNames):
-  # TODO: Could be more efficient.
-  for name in includeNames:
-    content = content.replace('#include "{}"'.format(name), '')
-    content = content.replace('#include <{}>'.format(name), '')
-  return content
+separatorTemplate = '''
+// ==========================================
+// {}
+// ==========================================
+'''
+
+def get_content(*fullHeaderFilePaths, alreadyIncluded):
+  for currentHeaderFilePath in fullHeaderFilePaths:
+    if currentHeaderFilePath.exists() and currentHeaderFilePath.is_file():
+      if currentHeaderFilePath not in alreadyIncluded:
+        alreadyIncluded.append(alreadyIncluded)
+        with currentHeaderFilePath.open('r') as file:
+          for sourceLine in file:
+            sourceLine = sourceLine.rstrip()
+            line = sourceLine.lstrip()
+            if line and line[0] == '#':
+              line = line[1:].lstrip()
+              if line.startswith('include'):
+                line = line[7:].strip()
+                isLocalInclude = line[0] == '"'
+                isGlobalInclude = line[0] == '<'
+                if isLocalInclude:
+                  includedFileName = line[1:-1]
+                  if includedFileName in allHeaders:
+                    includedFilePath = (currentHeaderFilePath.parent/includedFileName).resolve()
+                    if includedFilePath not in alreadyIncluded:
+                      alreadyIncluded.append(includedFilePath)
+                      separator = separatorTemplate.format(includedFileName)
+                      yield separator
+                      for innerLine in get_content(includedFilePath, alreadyIncluded=alreadyIncluded):
+                        yield innerLine
+                    # Skip the include statement in any case.
+                    continue
+                else:
+                  assert isGlobalInclude, "wtf?"
+            yield sourceLine
 
 
-#
-# Makers
-#
-@maker('mtb_platform')
-def make_mtb_platform(codeDir):
-  platformContent = (codeDir / 'mtb_platform.hpp').read_text()
-  return platformContent
-
-@maker('mtb_common')
-def make_mtb_common(codeDir):
-  platformContent = make_mtb_platform(codeDir)
-  mtbContent = (codeDir / 'mtb_common.hpp').read_text()
-  mtbContent = remove_includes(mtbContent, 'mtb_platform.hpp')
-  return '{}\n\n{}'.format(platformContent, mtbContent)
-
-@maker('mtb_assert')
-def make_mtb_assert(codeDir):
-  mtbContent = make_mtb_common(codeDir)
-  assertContent = (codeDir / 'mtb_assert.hpp').read_text()
-  assertContent = remove_includes(assertContent, 'mtb_common.hpp')
-  return '{}\n\n{}'.format(mtbContent, assertContent)
-
-@maker('mtb_memory')
-def make_mtb_memory(codeDir):
-  mtbContent = make_mtb_common(codeDir)
-  assertContent = make_mtb_assert(codeDir)
-  memoryContent = (codeDir / 'mtb_memory.hpp').read_text()
-  memoryContent = remove_includes(memoryContent, 'mtb_common.hpp', 'mtb_assert.hpp')
-  return '{}\n\n{}\n\n{}'.format(mtbContent, assertContent, memoryContent)
-
-
-#
-# Dispatch
-#
-def dispatch(name, codeDir):
-  if name == 'all':
-    return make_mtb_memory(codeDir)
+def process_header_file_paths(basePath, paths):
+  result = []
+  if len(paths) == 0:
+    result = [basePath/x for x in allHeaders]
   else:
-    if not name in makerRegistry:
-      print("Unknown:", name, file=sys.stderr)
-      sys.exit(1)
-
-    make = makerRegistry[name]
-    return make(codeDir)
-
+    for path in headerFilePaths:
+      fullPath = None
+      if path.exists():
+        fullPath = path.resolve()
+      elif (basePath/path).exists():
+        fullPath = (basePath/path).resolve();
+      else:
+        print('Unknown header file:', path, file=sys.stderr)
+      if fullPath:
+        result.append(fullPath)
+  return result
 
 #
 # Main
@@ -72,10 +75,9 @@ if __name__ == '__main__':
   repoDir = thisFilePath.parent.parent
 
   parser = argparse.ArgumentParser()
-  parser.add_argument('mtbName',
-                      nargs='?',
-                      default='all',
-                      choices=['all'] + list(makerRegistry.keys()),
+  parser.add_argument('mtb_headers',
+                      nargs='*',
+                      type=Path,
                       help='The name of the library to create a self-contained version of.')
   parser.add_argument('-o', '--outfile', dest='outfile',
                       type=Path,
@@ -87,13 +89,16 @@ if __name__ == '__main__':
                       help='The directory of the mtb source code.')
 
   args = parser.parse_args()
-  name = args.mtbName
+  headerFilePaths = args.mtb_headers
   outFileName = args.outfile
   codeDir = args.codeDir.resolve()
-  content = dispatch(name, codeDir)
+
+  headerFilePaths = process_header_file_paths(codeDir, headerFilePaths)
+  content = get_content(*headerFilePaths, alreadyIncluded=[])
 
   outFile = sys.stdout
   if str(outFileName) != '-':
-    outFile = outFileName.open('w')
+    outFile = outFileName.open('w', newline='\n')
 
-  print(content, file=outFile)
+  for line in content:
+    print(line, file=outFile)
