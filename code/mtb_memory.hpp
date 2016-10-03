@@ -40,17 +40,17 @@ namespace mtb
 ///
 /// Destination and Source may overlap.
 void
-CopyBytes(memory_size Size, void* Destination, void const* Source);
+CopyBytes(size_t Size, void* Destination, void const* Source);
 
 /// Fill NumBytes in Destination with the value
 void
-SetBytes(memory_size Size, void* Destination, int Value);
+SetBytes(size_t Size, void* Destination, int Value);
 
 bool
-AreBytesEqual(memory_size Size, void const* A, void const* B);
+AreBytesEqual(size_t Size, void const* A, void const* B);
 
 int
-CompareBytes(memory_size Size, void const* A, void const* B);
+CompareBytes(size_t Size, void const* A, void const* B);
 
 
 /// Calls the constructor of all elements in Destination with Args.
@@ -106,7 +106,7 @@ void
 SetElements(size_t Num, T* Destination, T const& Item);
 
 bool
-ImplTestMemoryOverlap(memory_size SizeA, void const* A, memory_size SizeB, void const* B);
+ImplTestMemoryOverlap(size_t SizeA, void const* A, size_t SizeB, void const* B);
 
 template<typename TA, typename TB>
 bool
@@ -452,43 +452,43 @@ SetElements(size_t Num, T* Destination, T const& Item)
 #include <cstring>
 
 auto mtb::
-CopyBytes(memory_size Size, void* Destination, void const* Source)
+CopyBytes(size_t Size, void* Destination, void const* Source)
   -> void
 {
   // Using memmove so that Destination and Source may overlap.
-  std::memmove(Destination, Source, ToBytes(Size));
+  std::memmove(Destination, Source, Size);
 }
 
 auto mtb::
-SetBytes(memory_size Size, void* Destination, int Value)
+SetBytes(size_t Size, void* Destination, int Value)
   -> void
 {
-  std::memset(Destination, Value, ToBytes(Size));
+  std::memset(Destination, Value, Size);
 }
 
 auto mtb::
-AreBytesEqual(memory_size Size, void const* A, void const* B)
+AreBytesEqual(size_t Size, void const* A, void const* B)
   -> bool
 {
   return CompareBytes(Size, A, B) == 0;
 }
 
 auto mtb::
-CompareBytes(memory_size Size, void const* A, void const* B)
+CompareBytes(size_t Size, void const* A, void const* B)
   -> int
 {
-  return std::memcmp(A, B, ToBytes(Size));
+  return std::memcmp(A, B, Size);
 }
 
 auto mtb::
-ImplTestMemoryOverlap(memory_size SizeA, void const* A, memory_size SizeB, void const* B)
+ImplTestMemoryOverlap(size_t SizeA, void const* A, size_t SizeB, void const* B)
   -> bool
 {
   auto LeftA = Reinterpret<size_t const>(A);
-  auto RightA = LeftA + ToBytes(SizeA);
+  auto RightA = LeftA + SizeA;
 
   auto LeftB = Reinterpret<size_t const>(B);
-  auto RightB = LeftB + ToBytes(SizeB);
+  auto RightB = LeftB + SizeB;
 
   return LeftB  >= LeftA && LeftB  <= RightA || // Check if LeftB  is in [A, A+SizeA]
          RightB >= LeftA && RightB <= RightA || // Check if RightB is in [A, A+SizeA]

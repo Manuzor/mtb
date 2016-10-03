@@ -70,59 +70,25 @@ MTB_DefineArrayTypes(f64);
 // ============================
 //
 
-struct memory_size
-{
-  // In bytes.
-  u64 Value;
+constexpr u64 KiB(u64 Amount) { return { Amount * 1024 }; }
+constexpr u64 MiB(u64 Amount) { return { Amount * 1024 * 1024 }; }
+constexpr u64 GiB(u64 Amount) { return { Amount * 1024 * 1024 * 1024 }; }
+constexpr u64 TiB(u64 Amount) { return { Amount * 1024 * 1024 * 1024 * 1024 }; }
 
-  constexpr
-  operator size_t() const
-  {
-    // TODO: Ensure safe conversion?
-    return (size_t)Value;
-  }
-};
+constexpr u64 KB(u64 Amount) { return { Amount * 1000 }; }
+constexpr u64 MB(u64 Amount) { return { Amount * 1000 * 1000 }; }
+constexpr u64 GB(u64 Amount) { return { Amount * 1000 * 1000 * 1000 }; }
+constexpr u64 TB(u64 Amount) { return { Amount * 1000 * 1000 * 1000 * 1000 }; }
 
-constexpr bool operator ==(memory_size A, memory_size B) { return A.Value == B.Value; }
-constexpr bool operator !=(memory_size A, memory_size B) { return A.Value != B.Value; }
-constexpr bool operator < (memory_size A, memory_size B) { return A.Value <  B.Value; }
-constexpr bool operator <=(memory_size A, memory_size B) { return A.Value <= B.Value; }
-constexpr bool operator > (memory_size A, memory_size B) { return A.Value >  B.Value; }
-constexpr bool operator >=(memory_size A, memory_size B) { return A.Value >= B.Value; }
+template<typename OutputType = float> constexpr OutputType ToKiB(u64 Size) { return (OutputType)((double)Size / 1024); }
+template<typename OutputType = float> constexpr OutputType ToMiB(u64 Size) { return (OutputType)((double)Size / 1024 / 1024); }
+template<typename OutputType = float> constexpr OutputType ToGiB(u64 Size) { return (OutputType)((double)Size / 1024 / 1024 / 1024); }
+template<typename OutputType = float> constexpr OutputType ToTiB(u64 Size) { return (OutputType)((double)Size / 1024 / 1024 / 1024 / 1024); }
 
-constexpr memory_size operator +(memory_size A, memory_size B) { return { A.Value + B.Value }; }
-constexpr memory_size operator -(memory_size A, memory_size B) { return { A.Value - B.Value }; }
-constexpr memory_size operator *(memory_size A, u64 Scale) { return { A.Value * Scale };   }
-constexpr memory_size operator *(u64 Scale, memory_size A) { return { Scale * A.Value };   }
-constexpr memory_size operator /(memory_size A, u64 Scale) { return { A.Value / Scale };   }
-
-void operator +=(memory_size& A, memory_size B);
-void operator -=(memory_size& A, memory_size B);
-void operator *=(memory_size& A, u64 Scale);
-void operator /=(memory_size& A, u64 Scale);
-
-constexpr memory_size Bytes(u64 Amount) { return { Amount }; }
-constexpr u64 ToBytes(memory_size Size) { return Size.Value; }
-
-constexpr memory_size KiB(u64 Amount) { return { Amount * 1024 }; }
-constexpr memory_size MiB(u64 Amount) { return { Amount * 1024 * 1024 }; }
-constexpr memory_size GiB(u64 Amount) { return { Amount * 1024 * 1024 * 1024 }; }
-constexpr memory_size TiB(u64 Amount) { return { Amount * 1024 * 1024 * 1024 * 1024 }; }
-
-constexpr memory_size KB(u64 Amount) { return { Amount * 1000 }; }
-constexpr memory_size MB(u64 Amount) { return { Amount * 1000 * 1000 }; }
-constexpr memory_size GB(u64 Amount) { return { Amount * 1000 * 1000 * 1000 }; }
-constexpr memory_size TB(u64 Amount) { return { Amount * 1000 * 1000 * 1000 * 1000 }; }
-
-template<typename OutputType = float> constexpr OutputType ToKiB(memory_size Size) { return OutputType(double(Size.Value) / 1024); }
-template<typename OutputType = float> constexpr OutputType ToMiB(memory_size Size) { return OutputType(double(Size.Value) / 1024 / 1024); }
-template<typename OutputType = float> constexpr OutputType ToGiB(memory_size Size) { return OutputType(double(Size.Value) / 1024 / 1024 / 1024); }
-template<typename OutputType = float> constexpr OutputType ToTiB(memory_size Size) { return OutputType(double(Size.Value) / 1024 / 1024 / 1024 / 1024); }
-
-template<typename OutputType = float> constexpr OutputType ToKB(memory_size Size) { return OutputType(double(Size.Value) / 1000); }
-template<typename OutputType = float> constexpr OutputType ToMB(memory_size Size) { return OutputType(double(Size.Value) / 1000 / 1000); }
-template<typename OutputType = float> constexpr OutputType ToGB(memory_size Size) { return OutputType(double(Size.Value) / 1000 / 1000 / 1000); }
-template<typename OutputType = float> constexpr OutputType ToTB(memory_size Size) { return OutputType(double(Size.Value) / 1000 / 1000 / 1000 / 1000); }
+template<typename OutputType = float> constexpr OutputType ToKB(u64 Size) { return (OutputType)((double)Size / 1000); }
+template<typename OutputType = float> constexpr OutputType ToMB(u64 Size) { return (OutputType)((double)Size / 1000 / 1000); }
+template<typename OutputType = float> constexpr OutputType ToGB(u64 Size) { return (OutputType)((double)Size / 1000 / 1000 / 1000); }
+template<typename OutputType = float> constexpr OutputType ToTB(u64 Size) { return (OutputType)((double)Size / 1000 / 1000 / 1000 / 1000); }
 
 
 
@@ -166,8 +132,8 @@ template<>           struct impl_size_of<void volatile> : impl_size_of<u8 volati
 /// Same as sizeof(T) except it works also with 'void' (possibly cv-qualified)
 /// where a size of 1 byte is assumed.
 template<typename T>
-constexpr memory_size
-SizeOf() { return Bytes(impl_size_of<T>::SizeInBytes); }
+constexpr size_t
+SizeOf() { return (size_t)impl_size_of<T>::SizeInBytes; }
 
 /// Returns the number of elements in this static array.
 template<typename T, size_t N>
@@ -231,7 +197,7 @@ template<typename PointerType, typename OffsetType>
 constexpr PointerType*
 AddElementOffset(PointerType* Pointer, OffsetType Offset)
 {
-  return AddByteOffset(Pointer, Offset * ToBytes(SizeOf<PointerType>()));
+  return AddByteOffset(Pointer, Offset * SizeOf<PointerType>());
 }
 
 template<typename T> struct impl_is_pod
@@ -881,30 +847,6 @@ struct impl_defer
 #define MTB_IMPL_mtb_common
 
 #include <math.h>
-
-void mtb::
-operator +=(memory_size& A, memory_size B)
-{
-  A.Value += B.Value;
-}
-
-void mtb::
-operator -=(memory_size& A, memory_size B)
-{
-  A.Value -= B.Value;
-}
-
-void mtb::
-operator *=(memory_size& A, u64 Scale)
-{
-  A.Value *= Scale;
-}
-
-void mtb::
-operator /=(memory_size& A, u64 Scale)
-{
-  A.Value /= Scale;
-}
 
 float mtb::
 Pow(float Base, float Exponent)

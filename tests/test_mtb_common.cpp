@@ -60,27 +60,27 @@ TEST_CASE("Byte Sizes", "[Common]")
 {
   using namespace mtb;
 
-  REQUIRE( ToBytes(KiB(3)) == 3 * 1024ULL );
-  REQUIRE( ToBytes(MiB(3)) == 3 * 1024ULL * 1024ULL );
-  REQUIRE( ToBytes(GiB(3)) == 3 * 1024ULL * 1024ULL * 1024ULL );
-  REQUIRE( ToBytes(TiB(3)) == 3 * 1024ULL * 1024ULL * 1024ULL * 1024ULL );
+  REQUIRE( KiB(3) == 3 * 1024ULL );
+  REQUIRE( MiB(3) == 3 * 1024ULL * 1024ULL );
+  REQUIRE( GiB(3) == 3 * 1024ULL * 1024ULL * 1024ULL );
+  REQUIRE( TiB(3) == 3 * 1024ULL * 1024ULL * 1024ULL * 1024ULL );
 
-  REQUIRE( ToBytes(KB(3)) == 3 * 1000ULL );
-  REQUIRE( ToBytes(MB(3)) == 3 * 1000ULL * 1000ULL );
-  REQUIRE( ToBytes(GB(3)) == 3 * 1000ULL * 1000ULL * 1000ULL );
-  REQUIRE( ToBytes(TB(3)) == 3 * 1000ULL * 1000ULL * 1000ULL * 1000ULL );
+  REQUIRE( KB(3) == 3 * 1000ULL );
+  REQUIRE( MB(3) == 3 * 1000ULL * 1000ULL );
+  REQUIRE( GB(3) == 3 * 1000ULL * 1000ULL * 1000ULL );
+  REQUIRE( TB(3) == 3 * 1000ULL * 1000ULL * 1000ULL * 1000ULL );
 
-  REQUIRE( ToKiB(Bytes(512)) == 0.5f );
-  REQUIRE( ToKiB<u64>(Bytes(512)) == 0 );
-  REQUIRE( ToKiB<u32>(Bytes(512)) == 0 );
-  REQUIRE( ToKiB<u16>(Bytes(512)) == 0 );
-  REQUIRE( ToKiB<u8>(Bytes(512)) == 0 );
+  REQUIRE( ToKiB(512) == 0.5f );
+  REQUIRE( ToKiB<u64>(512) == 0 );
+  REQUIRE( ToKiB<u32>(512) == 0 );
+  REQUIRE( ToKiB<u16>(512) == 0 );
+  REQUIRE( ToKiB<u8>(512) == 0 );
 
-  REQUIRE( ToKiB(Bytes(2 * 1024)) == 2.0f );
-  REQUIRE( ToKiB<u64>(Bytes(2 * 1024)) == 2 );
-  REQUIRE( ToKiB<u32>(Bytes(2 * 1024)) == 2 );
-  REQUIRE( ToKiB<u16>(Bytes(2 * 1024)) == 2 );
-  REQUIRE( ToKiB<u8>(Bytes(2 * 1024)) == 2 );
+  REQUIRE( ToKiB(2 * 1024) == 2.0f );
+  REQUIRE( ToKiB<u64>(2 * 1024) == 2 );
+  REQUIRE( ToKiB<u32>(2 * 1024) == 2 );
+  REQUIRE( ToKiB<u16>(2 * 1024) == 2 );
+  REQUIRE( ToKiB<u8>(2 * 1024) == 2 );
 }
 
 TEST_CASE("Length of static arrays", "[Common]")

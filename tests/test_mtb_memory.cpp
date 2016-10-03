@@ -92,7 +92,7 @@ TEST_CASE("Memory Construction", "[Memory]")
     REQUIRE( Counters->Ctor == 1 * Convert<int>(LengthOf(Foos)) );
     REQUIRE( Counters->Dtor == 0 * Convert<int>(LengthOf(Foos)) );
 
-    SetBytes(Bytes(LengthOf(Foos) * SizeOf<foo>()), Foos, 0);
+    SetBytes(ByteLengthOf(Foos), Foos, 0);
 
     ConstructElements(LengthOf(Foos), Foos);
     REQUIRE( Counters->Ctor == 2 * Convert<int>(LengthOf(Foos)) );
