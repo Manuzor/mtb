@@ -116,6 +116,14 @@ bool OnFailedCheck(
     } while(0)
 #endif
 
+#if !defined(MTB_NotImplemented)
+  #define MTB_NotImplemented MTB_ReportError("Not implemented.")
+#endif
+
+#if !defined(MTB_InvalidCodePath)
+  #define MTB_InvalidCodePath MTB_ReportError("Invalid code path.")
+#endif
+
 
 //
 // Make sure all assert macros are at least defined.
