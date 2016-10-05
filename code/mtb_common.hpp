@@ -848,44 +848,51 @@ struct impl_defer
 
 #include <math.h>
 
-float mtb::
+auto mtb::
 Pow(float Base, float Exponent)
+  -> float
 {
   return powf(Base, Exponent);
 }
 
-double mtb::
+auto mtb::
 Pow(double Base, double Exponent)
+  -> double
 {
   return pow(Base, Exponent);
 }
 
-float mtb::
+auto mtb::
 Mod(float Value, float Divisor)
+  -> float
 {
   return fmodf(Value, Divisor);
 }
 
-double mtb::
+auto mtb::
 Mod(double Value, double Divisor)
+  -> double
 {
   return fmod(Value, Divisor);
 }
 
-float mtb::
+auto mtb::
 Sqrt(float Value)
+  -> float
 {
   return sqrtf(Value);
 }
 
-double mtb::
+auto mtb::
 Sqrt(double Value)
+  -> double
 {
   return sqrt(Value);
 }
 
-float mtb::
+auto mtb::
 InvSqrt(float Value)
+  -> float
 {
   union FloatInt
   {
@@ -907,14 +914,16 @@ InvSqrt(float Value)
   return Result;
 }
 
-bool mtb::
+auto mtb::
 AreNearlyEqual(double A, double B, double Epsilon)
+  -> bool
 {
   return Abs(A - B) <= Epsilon;
 }
 
-bool mtb::
+auto mtb::
 AreNearlyEqual(float A, float B, float Epsilon)
+  -> bool
 {
   return Abs(A - B) <= Epsilon;
 }
