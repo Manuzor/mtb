@@ -148,12 +148,12 @@ LengthOf32(T(&)[N]) { return (u32)N; }
 /// Returns the number of elements in this static array.
 template<typename T, size_t N>
 constexpr size_t
-ByteLengthOf(T(&)[N]) { return N * (1 / SizeOf<T>()); }
+ByteLengthOf(T(&)[N]) { return N * SizeOf<T>(); }
 
 /// Same as \c LengthOf but force to 32 bit value.
 template<typename T, size_t N>
 constexpr u32
-ByteLengthOf32(T(&)[N]) { return (u32)N * (1 / SizeOf<T>()); }
+ByteLengthOf32(T(&)[N]) { return (u32)N * SizeOf<T>(); }
 
 /// Reinterpretation of the given pointer in case PointerType is `void`.
 template<typename PointerType>
