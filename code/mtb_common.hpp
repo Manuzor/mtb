@@ -106,6 +106,10 @@ constexpr bool IsBitSet(u64 Bits, u64 Position) { return !!(Bits & (u64(1) << Po
 constexpr bool IsPowerOfTwo(u32 Value) { return Value < 1 ? false : (Value & (Value - 1)) == 0; }
 constexpr bool IsPowerOfTwo(u64 Value) { return Value < 1 ? false : (Value & (Value - 1)) == 0; }
 
+constexpr u32 AlignValue_PowerOfTwo(u32 Value, int Alignment) { return ((Value + Alignment - 1) / Alignment) * Alignment; }
+constexpr u64 AlignValue_PowerOfTwo(u64 Value, int Alignment) { return ((Value + Alignment - 1) / Alignment) * Alignment; }
+
+constexpr void* AlignPointer(void* Pointer, int Alignment) { return (void*)AlignValue_PowerOfTwo((size_t)Pointer, Alignment); }
 
 //
 // ============================

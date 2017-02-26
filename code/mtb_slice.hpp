@@ -155,20 +155,21 @@ template<typename ElementType>
 slice<ElementType>
 Concat(slice<ElementType const> Head, slice<ElementType const> Tail, slice<ElementType> Buffer)
 {
-  MTB_BoundsCheck(LengthOf(Buffer) >= LengthOf(Head) + LengthOf(Tail));
-  size_t DestIndex = 0;
-  for(auto Element : Head)
+  size_t BufferIndex{};
+  size_t HeadIndex{};
+  size_t TailIndex{};
+
+  while(BufferIndex < LengthOf(Buffer) && HeadIndex < LengthOf(Head))
   {
-    Buffer[DestIndex++] = Element;
-  }
-  for(auto Element : Tail)
-  {
-    Buffer[DestIndex++] = Element;
+    Buffer[BufferIndex++] = Head[HeadIndex++];
   }
 
-  // DestIndex must now be the combined count of Head and Tail.
-  MTB_ReleaseAssert(DestIndex == LengthOf(Head) + LengthOf(Tail));
-  auto Result = Slice(Buffer, 0, DestIndex);
+  while(BufferIndex < LengthOf(Buffer) && TailIndex < LengthOf(Tail))
+  {
+    Buffer[BufferIndex++] = Tail[TailIndex++];
+  }
+
+  slice<ElementType> Result = Slice(Buffer, 0, BufferIndex);
   return Result;
 }
 

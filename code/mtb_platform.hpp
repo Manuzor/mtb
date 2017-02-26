@@ -189,10 +189,10 @@
 #endif
 
 #if !defined(MTB_Internal)
-  #if defined(MTB_ReleaseBuild)
-    #define MTB_Internal MTB_Off
-  #else
+  #if MTB_IsOff(MTB_ReleaseBuild)
     #define MTB_Internal MTB_On
+  #else
+    #define MTB_Internal MTB_Off
   #endif
 #endif
 
@@ -206,6 +206,13 @@
     #define MTB_DebugCode(...) __VA_ARGS__
   #else
     #define MTB_DebugCode(...)
+  #endif
+#endif
+#if !defined(MTB_InternalCode)
+  #if MTB_IsOn(MTB_Internal)
+    #define MTB_InternalCode(...) __VA_ARGS__
+  #else
+    #define MTB_InternalCode(...)
   #endif
 #endif
 
