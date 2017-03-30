@@ -3,7 +3,7 @@ setlocal
 
 set RepoRoot=%~dp0..
 
-set BuildDir=%RepoRoot%/build/win_msvc_x86-64_debug
+set BuildDir=%RepoRoot%/_build/win_msvc_x86-64_debug
 if not exist "%BuildDir%" mkdir "%BuildDir%"
 pushd "%BuildDir%"
   set OutFilePath=tests.exe

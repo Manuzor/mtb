@@ -44,7 +44,7 @@ if __name__ == '__main__':
   parser.add_argument('dest',
                       nargs='?',
                       type=Path,
-                      default=(repoDir / 'workspace' / 'mtb.sublime-project'),
+                      default=(repoDir / '_workspace' / 'mtb.sublime-project'),
                       help='The destination file.')
   args = parser.parse_args()
   main(destFilePath=args.dest)
