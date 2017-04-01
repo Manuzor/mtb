@@ -83,6 +83,13 @@
                    // + ' User32.lib'
                    // + ' Gdi32.lib'
 
+     .CompilerInputFiles =
+     {
+      '$RepoRoot$/tests/main.cpp'
+      '$RepoRoot$/tests/tests.cpp'
+      '$RepoRoot$/tests/mtb.cpp'
+    }
+
     // win_msvc_x64_debug
     {
       .MyConfigId = 'debug'
@@ -102,13 +109,12 @@
       .LinkerOptions + ' /DEBUG'
 
       .MyTarget = '$MyName$-$MyBuildId$'
-      ObjectList( '$MyTarget$-main_obj' )  { .CompilerInputFiles = '$RepoRoot$/tests/main.cpp' }
-      ObjectList( '$MyTarget$-tests_obj' ) { .CompilerInputFiles = '$RepoRoot$/tests/tests.cpp' }
-      ObjectList( '$MyTarget$-mtb_obj' )   { .CompilerInputFiles = '$RepoRoot$/tests/mtb.cpp' }
+      ObjectList( '$MyTarget$-obj' ) {}
       Executable( '$MyTarget$' )
       {
-        .Libraries = { '$MyTarget$-main_obj', '$MyTarget$-mtb_obj', '$MyTarget$-tests_obj' }
+        .Libraries = { '$MyTarget$-obj' }
       }
+
       ^MyTargetList + .MyTarget
       ^MyDebugTargetList + .MyTarget
 
@@ -137,12 +143,10 @@
                        + ' /Ox'
 
       .MyTarget = '$MyName$-$MyBuildId$'
-      ObjectList( '$MyTarget$-main_obj' )  { .CompilerInputFiles = '$RepoRoot$/tests/main.cpp' }
-      ObjectList( '$MyTarget$-tests_obj' ) { .CompilerInputFiles = '$RepoRoot$/tests/tests.cpp' }
-      ObjectList( '$MyTarget$-mtb_obj' )   { .CompilerInputFiles = '$RepoRoot$/tests/mtb.cpp' }
+      ObjectList( '$MyTarget$-obj' ) {}
       Executable( '$MyTarget$' )
       {
-        .Libraries = { '$MyTarget$-main_obj', '$MyTarget$-mtb_obj', '$MyTarget$-tests_obj' }
+        .Libraries = { '$MyTarget$-obj' }
       }
       ^MyTargetList + .MyTarget
       ^MyReleaseTargetList + .MyTarget
@@ -168,8 +172,6 @@
 
         .ProjectBuildCommand   = '$MyBuildExecutable$ ^$(ProjectName)-^$(Configuration) -ide'
         .ProjectRebuildCommand   = '$MyBuildExecutable$ ^$(ProjectName)-^$(Configuration) -ide -clean'
-        // TODO(Manuzor): Find a way to clean.
-        // .ProjectCleanCommand   = '"$RepoRoot$\build.ps1" ^$(ProjectName)-^$(Configuration)-clean -ide -clean'
         .Output = '$MyBuildRoot$/$MyVsBuildId$/$MyOutputName$$MyOutputExtension$'
 
         .OutputDirectory       = '$MyBuildRoot$/$MyVsBuildId$'
@@ -266,8 +268,7 @@
 VSSolution( '$MySolutionName$' )
 {
   .SolutionOutput = '$MyVisualStudioRoot$/$MySolutionName$.sln'
-  //TODO: .SolutionBuildProject = 'Application-Proj'
-  // Note: Use .ExtraFiles to add a .natvis file, for example.
+  .ExtraFiles = { '$RepoRoot$/code/mtb.natvis' }
 }
 
 Alias( 'vs' )
