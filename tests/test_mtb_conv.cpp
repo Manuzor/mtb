@@ -1,7 +1,5 @@
 #include "mtb_conv.hpp"
 
-#include "catch.hpp"
-
 
 static void
 TestFloat(char const* String, double ExpectedValue, int ExpectedRemainingNumStringElements)

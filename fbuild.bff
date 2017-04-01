@@ -1,0 +1,290 @@
+// Get information about the current system, such as the latest
+// Visual Studio version or the latest Windows 10 SDK version.
+#include "_workspace/system.bff"
+
+
+//
+// Setup
+//
+.MyBuildExecutable = 'powershell -ExecutionPolicy Bypass "$RepoRoot$/build.ps1"'
+
+.MyVisualStudioRoot = '$MyWorkspaceRoot$/vs$VSVersionMajor$'
+.MySolutionName = 'mtb'
+.MyAllConfigs = { 'win_msvc_x64_debug', 'win_msvc_x64_release' }
+
+.MyTargetList = {}
+.MyDebugTargetList = {}
+.MyReleaseTargetList = {}
+
+.SolutionConfigs = {}
+.SolutionProjects = {}
+.SolutionFolders = {}
+
+// Even though it is irrelevant whether we tell Visual Studio about the exact
+// platform toolset, we specify it to shut up annoying warnings when loading
+// .vcxproj files in Visual Studio.
+.PlatformToolset = 'v$VSVersionMajor$0'
+
+
+//
+// Define targets
+//
+{
+  .ProjectConfigs = {}
+  .ProjectInputPaths = {}
+
+  .MyName = 'mtb_tests'
+
+  .ProjectBasePath = '$RepoRoot$'
+  .ProjectInputPaths + { '$RepoRoot$/code' }
+
+  // win_msvc_x64
+  {
+    .MyOutputName = 'mtb_tests'
+    .MyOutputExtension = '.exe'
+
+    .MyPlatformId = 'win_msvc_x64'
+
+    .Compiler = '$VSDir$\VC\bin\amd64\cl.exe'
+    .CompilerOptions = ' %1 /Fo"%2" /c'
+                     + ' /nologo'
+                     + ' /EHsc'
+                     + ' /DMTB_Exceptions=MTB_On'
+
+                     //
+                     // My Includes
+                     //
+                     + ' /I"$RepoRoot$/code"'
+
+                     //
+                     // Windows specific defines
+                     //
+                     + ' /DNOMINMAX'                // Exclude annoying Windows macros.
+                     + ' /DWIN32_LEAN_AND_MEAN'     // Strip some rarely used Windows stuff.
+                     + ' /D_CRT_SECURE_NO_WARNINGS' // Shut up windows.h's warnings
+
+                     //
+                     // System Includes
+                     //
+                     + ' /I"$VSDir$\VC\Include"'
+                     + ' /I"$WindowsSDKDir$\Include\$WindowsSDKVersion$\ucrt"'
+                     + ' /I"$WindowsSDKDir$\Include\$WindowsSDKVersion$\shared"'
+                     + ' /I"$WindowsSDKDir$\Include\$WindowsSDKVersion$\um"'
+                     + ' /I"$WindowsSDKDir$\Include\$WindowsSDKVersion$\winrt"'
+
+
+    .Linker = '$VSDir$\VC\bin\amd64\link.exe'
+    .LinkerOptions = ' %1 /OUT:"%2"'
+                   + ' /NOLOGO'
+                   + ' /INCREMENTAL:NO'
+                   + ' /LIBPATH:"$VSDir$\VC\lib\amd64"'
+                   + ' /LIBPATH:"$WindowsSDKDir$\Lib\$WindowsSDKVersion$\um\x64"'
+                   + ' /LIBPATH:"$WindowsSDKDir$\Lib\$WindowsSDKVersion$\ucrt\x64"'
+                   // + ' User32.lib'
+                   // + ' Gdi32.lib'
+
+    // win_msvc_x64_debug
+    {
+      .MyConfigId = 'debug'
+      .MyBuildId = '$MyPlatformId$_$MyConfigId$'
+      .MyBuildPath = '$MyBuildRoot$/$MyBuildId$'
+      .MyIntermediatePath = '$MyBuildRoot$/$MyBuildId$/intermediate'
+
+      .CompilerOutputPath = '$MyIntermediatePath$'
+      .LinkerOutputPath = '$MyBuildPath$'
+      .LinkerOutput = '$LinkerOutputPath$/$MyOutputName$$MyOutputExtension$'
+
+      .CompilerOptions + ' /Z7'
+                       + ' /MTd'
+                       + ' /DDEBUG'
+                       + ' /D_DEBUG'
+
+      .LinkerOptions + ' /DEBUG'
+
+      .MyTarget = '$MyName$-$MyBuildId$'
+      ObjectList( '$MyTarget$-main_obj' )  { .CompilerInputFiles = '$RepoRoot$/tests/main.cpp' }
+      ObjectList( '$MyTarget$-tests_obj' ) { .CompilerInputFiles = '$RepoRoot$/tests/tests.cpp' }
+      Executable( '$MyTarget$' )
+      {
+        .Libraries = { '$MyTarget$-main_obj', '$MyTarget$-tests_obj' }
+      }
+      ^MyTargetList + .MyTarget
+      ^MyDebugTargetList + .MyTarget
+
+      .MyProjectConfig =
+      [
+        .Config = '$MyBuildId$'
+        .Platform = 'Win32' // Unused
+        .Target = .MyTarget
+      ]
+      ^ProjectConfigs + .MyProjectConfig
+      ^SolutionConfigs + .MyProjectConfig
+    }
+
+    // win_msvc_x64_release
+    {
+      .MyConfigId = 'release'
+      .MyBuildId = '$MyPlatformId$_$MyConfigId$'
+      .MyBuildPath = '$MyBuildRoot$/$MyBuildId$'
+      .MyIntermediatePath = '$MyBuildRoot$/$MyBuildId$/intermediate'
+
+      .CompilerOutputPath = '$MyIntermediatePath$'
+      .LinkerOutputPath = '$MyBuildPath$'
+      .LinkerOutput = '$LinkerOutputPath$/$MyOutputName$$MyOutputExtension$'
+
+      .CompilerOptions + ' /MT'
+                       + ' /Ox'
+
+      .MyTarget = '$MyName$-$MyBuildId$'
+      ObjectList( '$MyTarget$-main_obj' )  { .CompilerInputFiles = '$RepoRoot$/tests/main.cpp' }
+      ObjectList( '$MyTarget$-tests_obj' ) { .CompilerInputFiles = '$RepoRoot$/tests/tests.cpp' }
+      Executable( '$MyTarget$' )
+      {
+        .Libraries = { '$MyTarget$-main_obj', '$MyTarget$-tests_obj' }
+      }
+      ^MyTargetList + .MyTarget
+      ^MyReleaseTargetList + .MyTarget
+
+      .MyProjectConfig =
+      [
+        .Config = '$MyBuildId$'
+        .Platform = 'Win32' // Unused
+        .Target = .MyTarget
+      ]
+      ^ProjectConfigs + .MyProjectConfig
+      ^SolutionConfigs + .MyProjectConfig
+    }
+
+    // Generate .vcxproj file
+    {
+      .MyProjectName = '$MyName$.vcxproj'
+      VCXProject( "$MyProjectName$" )
+      {
+        .MyVsBuildId = '^$(Configuration)'
+
+        .ProjectOutput = '$MyVisualStudioRoot$/$MyName$.vcxproj'
+
+        .ProjectBuildCommand   = '$MyBuildExecutable$ ^$(ProjectName)-^$(Configuration) -ide'
+        .ProjectRebuildCommand   = '$MyBuildExecutable$ ^$(ProjectName)-^$(Configuration) -ide -clean'
+        // TODO(Manuzor): Find a way to clean.
+        // .ProjectCleanCommand   = '"$RepoRoot$\build.ps1" ^$(ProjectName)-^$(Configuration)-clean -ide -clean'
+        .Output = '$MyBuildRoot$/$MyVsBuildId$/$MyOutputName$$MyOutputExtension$'
+
+        .OutputDirectory       = '$MyBuildRoot$/$MyVsBuildId$'
+        .IntermediateDirectory = '$MyBuildRoot$/$MyVsBuildId$/intermediate'
+        .LocalDebuggerWorkingDirectory = '^$(OutDir)'
+      }
+
+      ^SolutionProjects + .MyProjectName
+
+      .MyFolder =
+      [
+        .Path = 'projects'
+        .Projects = { .MyProjectName }
+      ]
+      ^SolutionFolders + .MyFolder
+    }
+  }
+}
+
+// Update MTB
+{
+  Exec( 'update-mtb' )
+  {
+    // .ExecExecutable         ; Executable to run
+    // .ExecInput              ; Input file(s) to pass to executable
+    // .ExecOutput             ; Output file generated by executable
+    // .ExecArguments          ; (optional) Arguments to pass to executable
+    // .ExecWorkingDir         ; (optional) Working dir to set for executable
+    // .ExecReturnCode         ; (optional) Expected return code from executable (default 0)
+    // .ExecUseStdOutAsOutput  ; (optional) Write the standard output from the executable to the output file
+
+    #if __WINDOWS__
+      .ExecExecutable = 'C:\Windows\py.exe'
+      .ExecArguments = '-3 '
+    #else
+      .ExecExecutable = '/usr/bin/python3'
+      .ExecArguments = ''
+    #endif
+    .ExecInput = '$RepoRoot$/../mtb/tools/generate_self_contained.py'
+    .ExecOutput = "$RepoRoot$/code/mtb.hpp"
+    .ExecArguments + '%1 --outfile %2'
+  }
+}
+
+//
+// Visual Studio solution (.sln)
+//
+{
+  .MyRegenerateSolutionSpec =
+  [
+    .MyName = 'regen_solution'
+    .MyFBuildConfigToInvoke = 'vs'
+  ]
+  .MyAllSpec =
+  [
+    .MyName = 'all'
+    .MyFBuildConfigToInvoke = 'all'
+  ]
+  .MySpecs = { .MyRegenerateSolutionSpec, .MyAllSpec }
+  ForEach( .MySpec in .MySpecs )
+  {
+    Using( .MySpec )
+
+    .MyProjectName = '$MyName$.vcxproj'
+    VCXProject( "$MyProjectName$" )
+    {
+      .ProjectOutput = '$MyVisualStudioRoot$/$MyName$.vcxproj'
+
+      .ProjectBuildCommand   = '$MyBuildExecutable$ $MyFBuildConfigToInvoke$ -ide'
+      .ProjectRebuildCommand = '$MyBuildExecutable$ $MyFBuildConfigToInvoke$ -ide -clean'
+
+      .ProjectConfigs = {}
+      ForEach( .MyConfig in .MyAllConfigs )
+      {
+        .MyProjectConfig =
+        [
+          .Platform = 'Win32' // Unused
+          .Config = .MyConfig
+        ]
+        ^ProjectConfigs + .MyProjectConfig
+      }
+    }
+    ^SolutionProjects + .MyProjectName
+
+    .MyFolder =
+    [
+      .Path = 'misc'
+      .Projects = { .MyProjectName }
+    ]
+    ^SolutionFolders + .MyFolder
+  }
+}
+
+VSSolution( '$MySolutionName$' )
+{
+  .SolutionOutput = '$MyVisualStudioRoot$/$MySolutionName$.sln'
+  //TODO: .SolutionBuildProject = 'Application-Proj'
+  // Note: Use .ExtraFiles to add a .natvis file, for example.
+}
+
+Alias( 'vs' )
+{
+  .Targets = '$MySolutionName$'
+}
+
+// The canonical alias 'all'
+Alias( 'all' )
+{
+  .Targets = .MyTargetList
+}
+
+Alias( 'debug' )
+{
+  .Targets = .MyDebugTargetList
+}
+
+Alias( 'release' )
+{
+  .Targets = .MyReleaseTargetList
+}

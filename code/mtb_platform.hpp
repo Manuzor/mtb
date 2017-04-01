@@ -231,10 +231,12 @@
 // For STL
 // NOTE: Don't undef to inform the user that we're overwriting their settings
 // if they specified it.
-#if MTB_IsOn(MTB_Exceptions)
-  #define _HAS_EXCEPTIONS 1
-#else
-  #define _HAS_EXCEPTIONS 0
+#if !defined(_HAS_EXCEPTIONS)
+  #if MTB_IsOn(MTB_Exceptions)
+    #define _HAS_EXCEPTIONS 1
+  #else
+    #define _HAS_EXCEPTIONS 0
+  #endif
 #endif
 
 

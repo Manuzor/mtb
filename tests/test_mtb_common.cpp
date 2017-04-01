@@ -1,6 +1,5 @@
 #include "mtb_common.hpp"
 
-#include "catch.hpp"
 
 namespace mtb
 {

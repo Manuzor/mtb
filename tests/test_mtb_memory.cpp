@@ -1,6 +1,5 @@
 #include "mtb_memory.hpp"
 
-#include "catch.hpp"
 
 namespace
 {

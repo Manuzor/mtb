@@ -1,6 +1,5 @@
 #include "mtb_slice.hpp"
 
-#include "catch.hpp"
 
 TEST_CASE("Slice creation", "[Slice]")
 {
