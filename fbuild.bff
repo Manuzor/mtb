@@ -104,9 +104,10 @@
       .MyTarget = '$MyName$-$MyBuildId$'
       ObjectList( '$MyTarget$-main_obj' )  { .CompilerInputFiles = '$RepoRoot$/tests/main.cpp' }
       ObjectList( '$MyTarget$-tests_obj' ) { .CompilerInputFiles = '$RepoRoot$/tests/tests.cpp' }
+      ObjectList( '$MyTarget$-mtb_obj' )   { .CompilerInputFiles = '$RepoRoot$/tests/mtb.cpp' }
       Executable( '$MyTarget$' )
       {
-        .Libraries = { '$MyTarget$-main_obj', '$MyTarget$-tests_obj' }
+        .Libraries = { '$MyTarget$-main_obj', '$MyTarget$-mtb_obj', '$MyTarget$-tests_obj' }
       }
       ^MyTargetList + .MyTarget
       ^MyDebugTargetList + .MyTarget
@@ -138,9 +139,10 @@
       .MyTarget = '$MyName$-$MyBuildId$'
       ObjectList( '$MyTarget$-main_obj' )  { .CompilerInputFiles = '$RepoRoot$/tests/main.cpp' }
       ObjectList( '$MyTarget$-tests_obj' ) { .CompilerInputFiles = '$RepoRoot$/tests/tests.cpp' }
+      ObjectList( '$MyTarget$-mtb_obj' )   { .CompilerInputFiles = '$RepoRoot$/tests/mtb.cpp' }
       Executable( '$MyTarget$' )
       {
-        .Libraries = { '$MyTarget$-main_obj', '$MyTarget$-tests_obj' }
+        .Libraries = { '$MyTarget$-main_obj', '$MyTarget$-mtb_obj', '$MyTarget$-tests_obj' }
       }
       ^MyTargetList + .MyTarget
       ^MyReleaseTargetList + .MyTarget
