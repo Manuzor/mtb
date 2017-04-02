@@ -256,12 +256,12 @@ Alias( 'all' )
   .Targets = .MyTargetList
 }
 
-Alias( 'debug' )
+Alias( 'all-debug' )
 {
   .Targets = .MyDebugTargetList
 }
 
-Alias( 'release' )
+Alias( 'all-release' )
 {
   .Targets = .MyReleaseTargetList
 }
