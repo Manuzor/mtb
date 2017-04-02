@@ -2,7 +2,7 @@ $RepoRoot = Get-Item (Join-Path $PSScriptRoot "..")
 $CatchReleasesURL = "https://api.github.com/repos/philsquared/Catch/releases"
 $CatchDestinationFilePath = Join-Path $RepoRoot "tests/catch.hpp"
 
-# Find the latest tag
+# Find the latest release
 $AllReleases = (Invoke-WebRequest $CatchReleasesURL -UseBasicParsing).Content | ConvertFrom-Json
 $LatestRelease = $AllReleases[0]
 $LatestAssets = $LatestRelease.assets
