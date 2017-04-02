@@ -1,6 +1,6 @@
 param(
   [string[]]$MtbHeaders,
-  [string]$OutFile = "-",
+  [string]$OutFilePath = "-",
   [string]$CodeDir
 )
 
@@ -116,11 +116,11 @@ if(!$CodeDir)
 $ProcessedHeaders = Process-HeaderFilePaths $CodeDir $MtbHeaders
 $Content = Get-MergedSourceContent $ProcessedHeaders @()
 
-if($OutFile -eq "-")
+if($OutFilePath -eq "-")
 {
   $Content
 }
 else
 {
-  Set-Content -Path $OutFile -Value $Content
+  Set-Content -Path $OutFilePath -Value $Content
 }
