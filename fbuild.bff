@@ -6,7 +6,7 @@
 //
 // Setup
 //
-.MyBuildExecutable = 'powershell -ExecutionPolicy Bypass "$RepoRoot$/build.ps1"'
+.MyBuildExecutable = 'powershell -ExecutionPolicy Bypass "$RepoRoot$/build.ps1" -ide'
 
 .MyVisualStudioRoot = '$MyWorkspaceRoot$/vs$VSVersionMajor$'
 .MySolutionName = 'mtb'
@@ -35,7 +35,7 @@
   .MyName = 'mtb_tests'
 
   .ProjectBasePath = '$RepoRoot$'
-  .ProjectInputPaths = { '$RepoRoot$/code' }
+  .ProjectInputPaths = { '$RepoRoot$/code', '$RepoRoot$/tests' }
 
   // win_msvc_x64
   {
@@ -113,6 +113,12 @@
       {
         .Libraries = { '$MyTarget$-obj' }
       }
+      Test( 'test-$MyTarget$' )
+      {
+        .TestExecutable = '$MyTarget$'
+        .TestOutput = '$LinkerOutputPath$/$MyOutputName$_results.txt'
+        .TestAlwaysShowOutput = true
+      }
 
       ^MyTargetList + .MyTarget
       ^MyDebugTargetList + .MyTarget
@@ -147,6 +153,12 @@
       {
         .Libraries = { '$MyTarget$-obj' }
       }
+      Test( 'test-$MyTarget$' )
+      {
+        .TestExecutable = '$MyTarget$'
+        .TestOutput = '$LinkerOutputPath$/$MyOutputName$_results.txt'
+        .TestAlwaysShowOutput = true
+      }
       ^MyTargetList + .MyTarget
       ^MyReleaseTargetList + .MyTarget
 
@@ -169,8 +181,8 @@
 
         .ProjectOutput = '$MyVisualStudioRoot$/$MyName$.vcxproj'
 
-        .ProjectBuildCommand   = '$MyBuildExecutable$ ^$(ProjectName)-^$(Configuration) -ide'
-        .ProjectRebuildCommand   = '$MyBuildExecutable$ ^$(ProjectName)-^$(Configuration) -ide -clean'
+        .ProjectBuildCommand   = '$MyBuildExecutable$ ^$(ProjectName)-^$(Configuration)'
+        .ProjectRebuildCommand   = '$MyBuildExecutable$ -clean ^$(ProjectName)-^$(Configuration)'
         .Output = '$MyBuildRoot$/$MyVsBuildId$/$MyOutputName$$MyOutputExtension$'
 
         .OutputDirectory       = '$MyBuildRoot$/$MyVsBuildId$'
@@ -214,8 +226,8 @@
     {
       .ProjectOutput = '$MyVisualStudioRoot$/$MyName$.vcxproj'
 
-      .ProjectBuildCommand   = '$MyBuildExecutable$ $MyFBuildConfigToInvoke$ -ide'
-      .ProjectRebuildCommand = '$MyBuildExecutable$ $MyFBuildConfigToInvoke$ -ide -clean'
+      .ProjectBuildCommand   = '$MyBuildExecutable$ $MyFBuildConfigToInvoke$'
+      .ProjectRebuildCommand = '$MyBuildExecutable$ -clean $MyFBuildConfigToInvoke$'
 
       .ProjectConfigs = {}
       ForEach( .MyConfig in .MyAllConfigs )

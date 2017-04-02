@@ -59,7 +59,7 @@ foreach($Action in @("Build", "Rebuild"))
 {
   foreach($Target in $FASTBuildTargets)
   {
-    $Cmd = @("powershell"; "-ExecutionPolicy"; "Bypass"; $BuildScript; $Target; "-ide";);
+    $Cmd = @("powershell"; "-ExecutionPolicy"; "Bypass"; $BuildScript; "-ide"; $Target;);
     if($Action -eq "Rebuild")
     {
       $Cmd += @("-clean")
