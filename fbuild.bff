@@ -188,6 +188,7 @@
         .OutputDirectory       = '$MyBuildRoot$/$MyVsBuildId$'
         .IntermediateDirectory = '$MyBuildRoot$/$MyVsBuildId$/intermediate'
         .LocalDebuggerWorkingDirectory = '^$(OutDir)'
+        .LocalDebuggerCommandArguments = '--break'
       }
 
       ^SolutionProjects + .MyProjectName

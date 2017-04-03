@@ -1,115 +1,80 @@
 #if !defined(MTB_HEADER_mtb_platform)
 #define MTB_HEADER_mtb_platform
 
-// MTB_On and MTB_Off are used to ensure an option was defined before it was
-// used. MTB_IsOn is used with something undefined
-
-//
-// Usage:
-//   #define MY_SETTING MTB_On
-//   #if MTB_IsOn(MY_SETTING)
-//     /* Do stuff */
-//   #endif
-#define MTB_On  +
-#define MTB_Off -
-#define MTB_IsOn(x)  ((1 x 1) == 2)
-#define MTB_IsOff(x) (!MTB_IsOn(x))
-
-
-#if defined(__cplusplus)
-  #define MTB_Cpp MTB_On
-#else
-  #define MTB_Cpp MTB_Off
-#endif
-
 // NOTE: Only c++ enabled for now.
-#if MTB_IsOff(MTB_Cpp)
-  #error MTB requires C++ (for now).
-#endif
+#define MTB_CPP __cplusplus
 
 
 //
+// MTB_CURRENT_COMPILER
 // Determine the compiler
-// MTB_Compiler_*
 //
-
-// Usage:
-//   #if MTB_IsCompiler(MSVC)
-//   /* ... */
-//   #endif
-#define MTB_IsCompiler(WHAT) MTB_IsOn(MTB_Compiler_##WHAT)
-
-#define MTB_Compiler_MSVC MTB_Off
-#define MTB_Compiler_GCC MTB_Off
-#define MTB_Compiler_Clang MTB_Off
+#define MTB_COMPILER_TYPE_UNKNOWN  0
+#define MTB_COMPILER_TYPE_MSVC    10
+#define MTB_COMPILER_TYPE_GCC     20
+#define MTB_COMPILER_TYPE_CLANG   30
 
 #if defined(_MSC_VER)
-  #undef  MTB_Compiler_MSVC
-  #define MTB_Compiler_MSVC MTB_On
+  #define MTB_CURRENT_COMPILER MTB_COMPILER_TYPE_MSVC
 #else
+  #define MTB_CURRENT_COMPILER MTB_COMPILER_TYPE_UNKNOWN
   #error "Unknown compiler."
 #endif
 
 
 //
+// MTB_CURRENT_OS
 // Determine the operating system
-// MTB_OS_*
 //
+#define MTB_OS_TYPE_UNKNOWN  0
+#define MTB_OS_TYPE_WINDOWS 10
+#define MTB_OS_TYPE_LINUX   20
+#define MTB_OS_TYPE_OSX     30
 
-#define MTB_OS_Windows MTB_Off
 
 #if defined(_WIN32) || defined(_WIN64)
-  #undef  MTB_OS_Windows
-  #define MTB_OS_Windows MTB_On
+  #define MTB_CURRENT_OS MTB_OS_TYPE_WINDOWS
 #else
   // TODO: Emit some kind of warning instead?
   #error "Unknown operating system."
+  #define MTB_CURRENT_OS MTB_OS_TYPE_UNKNOWN
 #endif
 
-#define MTB_IsOS(WHAT) MTB_IsOn(MTB_OS_##WHAT)
-
 
 //
+// MTB_CURRENT_ARCH
 // Determine the architecture and bitness
-// MTB_Arch_*
 //
-
-// Usage:
-// #if MTB_IsArch(x86)
-// /* ... */
-// #endif
-#define MTB_IsArch(WHAT) MTB_IsOn(MTB_Arch_##WHAT)
-
-#define MTB_Arch_x86    MTB_Off /* 32 bit version of the Intel x86 architecture. */
-#define MTB_Arch_x86_64 MTB_Off /* 64 bit version of the Intel x86 architecture. */
+#define MTB_ARCH_TYPE_UNKNOWN  0
+#define MTB_ARCH_TYPE_x86     10
+#define MTB_ARCH_TYPE_x64     20 // aka x86_64, amd64
 
 #if defined(_M_X64) || defined(_M_AMD64)
-  #undef  MTB_Arch_x86_64
-  #define MTB_Arch_x86_64 MTB_On
+  #define MTB_CURRENT_ARCH MTB_ARCH_TYPE_x64
 #elif defined(_M_IX86) || defined(_M_I86)
-  #undef  MTB_Arch_x86
-  #define MTB_Arch_x86 MTB_On
+  #define MTB_CURRENT_ARCH MTB_ARCH_TYPE_x86
 #else
+  #define MTB_CURRENT_ARCH MTB_ARCH_TYPE_UNKNOWN
   #error "Unknown architecture."
 #endif
 
-#define MTB_32BitArch MTB_IsOff
-#define MTB_64BitArch MTB_IsOff
-#define MTB_LittleEndian MTB_IsOff
-#define MTB_BigEndian MTB_IsOff
-
-#if MTB_IsArch(x86_64)
-  #undef  MTB_64BitArch
-  #define MTB_64BitArch MTB_On
-  #undef  MTB_LittleEndian
-  #define MTB_LittleEndian MTB_On
-#elif MTB_IsArch(x86)
-  #undef  MTB_32BitArch
-  #define MTB_32BitArch MTB_On
-  #undef  MTB_LittleEndian
-  #define MTB_LittleEndian MTB_On
+#if MTB_CURRENT_ARCH == MTB_ARCH_TYPE_x64
+  #define MTB_CURRENT_ARCH_BITNESS 64
+  #define MTB_IS_LITTLE_ENDIAN 1
+  #define MTB_IS_BIG_ENDIAN 0
+#elif MTB_CURRENT_ARCH == MTB_ARCH_TYPE_x86
+  #define MTB_CURRENT_ARCH_BITNESS 32
+  #define MTB_IS_LITTLE_ENDIAN 1
+  #define MTB_IS_BIG_ENDIAN 0
 #else
+  #define MTB_CURRENT_ARCH_BITNESS 0
+  #define MTB_IS_LITTLE_ENDIAN 0
+  #define MTB_IS_BIG_ENDIAN 0
   #error "Undefined architecture."
+#endif
+
+#if !defined(MTB_CURRENT_ARCH_BITNESS) || !defined(MTB_IS_LITTLE_ENDIAN) || !defined(MTB_IS_BIG_ENDIAN)
+  #error Invalid settings.
 #endif
 
 
@@ -117,26 +82,27 @@
 // Utility stuff
 //
 
-#define MTB_File __FILE__
-#define MTB_Line __LINE__
+#define MTB_CURRENT_FILE __FILE__
+#define MTB_CURRENT_LINE __LINE__
 
 #if defined(__PRETTY_FUNCTION__)
-  #define MTB_Function __PRETTY_FUNCTION__
+  #define MTB_CURRENT_FUNCTION __PRETTY_FUNCTION__
 #elif defined(__func__)
-  #define MTB_Function __func__
+  #define MTB_CURRENT_FUNCTION __func__
 #elif defined(__FUNCTION__)
-  #define MTB_Function __FUNCTION__
+  #define MTB_CURRENT_FUNCTION __FUNCTION__
 #else
-  #define MTB_Function ""
+  #define MTB_CURRENT_FUNCTION ""
 #endif
 
-#define MTB_Impl_ConcatLevel2(LEFT, RIGHT) LEFT##RIGHT
-#define MTB_Impl_ConcatLevel1(LEFT, RIGHT) MTB_Impl_ConcatLevel2(LEFT, RIGHT)
-#define MTB_Concat(LEFT, RIGHT) MTB_Impl_ConcatLevel1(LEFT, RIGHT)
+#define MTB_IMPL_CONCAT_L2(LEFT, RIGHT) LEFT##RIGHT
+#define MTB_IMPL_CONCAT_L1(LEFT, RIGHT) MTB_IMPL_CONCAT_L2(LEFT, RIGHT)
+#define MTB_CONCAT(LEFT, RIGHT) MTB_IMPL_CONCAT_L1(LEFT, RIGHT)
 
-#define MTB_Impl_Stringify(WHAT) #WHAT
-#define MTB_Stringify(WHAT) MTB_Impl_Stringify(WHAT)
+#define MTB_IMPL_STRINGIFY(WHAT) #WHAT
+#define MTB_STRINGIFY(WHAT) MTB_IMPL_STRINGIFY(WHAT)
 
+// A no-op that can be safely terminated with a semicolon.
 #if !defined(MTB_NOP)
   #define MTB_NOP do{}while(0)
 #endif
@@ -149,90 +115,129 @@
 // directly.
 //
 // Usage:
-//   MTB_Inline void func() { /* ... */ }
-#if !defined(MTB_Inline)
-  #if MTB_IsCompiler(MSVC)
-    #define MTB_Inline __forceinline
+//   MTB_INLINE void func() { /* ... */ }
+#if !defined(MTB_INLINE)
+  #if MTB_CURRENT_COMPILER == MTB_COMPILER_TYPE_MSVC
+    #define MTB_INLINE __forceinline
   #else
     // TODO: Emit a warning here?
     // Fallback to `inline`
-    #define MTB_Inline inline
+    #define MTB_INLINE inline
   #endif
 #endif
 
+//
+// Determine the current type of build
+//
+#define MTB_BUILD_TYPE_UNKNOWN 0
+#define MTB_BUILD_TYPE_DEBUG   10
+#define MTB_BUILD_TYPE_DEVELOP 20
+#define MTB_BUILD_TYPE_RELEASE 30
 
 // Try to automatically determine a debug build if the user did not specify anything.
-#if !defined(MTB_DebugBuild)
-  #if defined(_DEBUG)
-    #define MTB_DebugBuild MTB_On
+#if !defined(MTB_IS_DEBUG_BUILD)
+  #if defined(_DEBUG) || defined(DEBUG)
+    #define MTB_IS_DEBUG_BUILD 1
   #else
-    #define MTB_DebugBuild MTB_Off
+    #define MTB_IS_DEBUG_BUILD 0
   #endif
 #endif
 
 // Try to automatically determine a release build if the user did not specify anything.
-#if !defined(MTB_ReleaseBuild)
+#if !defined(MTB_IS_RELEASE_BUILD)
   #if defined(NDEBUG)
-    #define MTB_ReleaseBuild MTB_On
+    #define MTB_IS_RELEASE_BUILD 1
   #else
-    #define MTB_ReleaseBuild MTB_Off
+    #define MTB_IS_RELEASE_BUILD 0
   #endif
 #endif
 
 // Try to determine a development build if the user did not specify anything.
-#if !defined(MTB_DevBuild)
-  #if defined(MTB_ReleaseBuild)
-    #define MTB_DevBuild MTB_Off
+#if !defined(MTB_IS_DEV_BUILD)
+  #if defined(MTB_IS_RELEASE_BUILD)
+    #define MTB_IS_DEV_BUILD 0
   #else
-    #define MTB_DevBuild MTB_On
+    #define MTB_IS_DEV_BUILD 1
   #endif
 #endif
 
-#if !defined(MTB_Internal)
-  #if MTB_IsOff(MTB_ReleaseBuild)
-    #define MTB_Internal MTB_On
+// Validate settings
+#if (MTB_IS_DEBUG_BUILD + MTB_IS_DEV_BUILD + MTB_IS_RELEASE_BUILD) > 1
+  #error Only one of these may be set at a time: MTB_IS_DEBUG_BUILD, MTB_IS_DEV_BUILD, MTB_IS_RELEASE_BUILD
+#endif
+
+#if MTB_IS_DEBUG_BUILD
+  #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_DEBUG
+#elif MTB_IS_DEV_BUILD
+  #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_DEVELOP
+#elif MTB_IS_RELEASE_BUILD
+  #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_RELEASE
+#else
+  #error Exactly one of these must be set: MTB_IS_DEBUG_BUILD, MTB_IS_DEV_BUILD, MTB_IS_RELEASE_BUILD
+#endif
+
+#if !defined(MTB_IS_INTERNAL)
+  #if MTB_CURRENT_BUILD < MTB_BUILD_TYPE_RELEASE
+    #define MTB_IS_INTERNAL 1
   #else
-    #define MTB_Internal MTB_Off
+    #define MTB_IS_INTERNAL 0
   #endif
 #endif
 
-// Macro to enclose code that is only compiled in in debug builds.
+// Macro to enclose code that is only compiled in in the corresponding build type.
 //
 // Usage:
-//   MTB_DebugCode(auto result = ) someFunctionCall();
-//   MTB_DebugCode(if(result == 0))
-#if !defined(MTB_DebugCode)
-  #if MTB_IsOn(MTB_DebugBuild)
-    #define MTB_DebugCode(...) __VA_ARGS__
+//   MTB_DEBUG_CODE(auto result = ) someFunctionCall();
+//   MTB_DEBUG_CODE(if(result == 0) { /* ... */ })
+#if !defined(MTB_DEBUG_CODE)
+  #if MTB_CURRENT_BUILD <= MTB_BUILD_TYPE_DEBUG
+    #define MTB_DEBUG_CODE(...) __VA_ARGS__
   #else
-    #define MTB_DebugCode(...)
+    #define MTB_DEBUG_CODE(...) MTB_NOP
   #endif
 #endif
-#if !defined(MTB_InternalCode)
-  #if MTB_IsOn(MTB_Internal)
-    #define MTB_InternalCode(...) __VA_ARGS__
+
+#if !defined(MTB_DEV_CODE)
+  #if MTB_CURRENT_BUILD <= MTB_BUILD_TYPE_DEV
+    #define MTB_DEV_CODE(...) __VA_ARGS__
   #else
-    #define MTB_InternalCode(...)
+    #define MTB_DEV_CODE(...) MTB_NOP
+  #endif
+#endif
+
+#if !defined(MTB_RELEASE_CODE)
+  #if MTB_CURRENT_BUILD <= MTB_BUILD_TYPE_RELEASE
+    #define MTB_RELEASE_CODE(...) __VA_ARGS__
+  #else
+    #define MTB_RELEASE_CODE(...) MTB_NOP
+  #endif
+#endif
+
+#if !defined(MTB_INTERNAL_CODE)
+  #if MTB_CURRENT_BUILD <= MTB_BUILD_TYPE_INTERNAL
+    #define MTB_INTERNAL_CODE(...) __VA_ARGS__
+  #else
+    #define MTB_INTERNAL_CODE(...) MTB_NOP
   #endif
 #endif
 
 #if !defined(MTB_DebugBreak)
-  #if MTB_IsCompiler(MSVC)
-    #define MTB_DebugBreak do { __debugbreak(); } while(0)
+  #if MTB_CURRENT_COMPILER == MTB_COMPILER_TYPE_MSVC
+    #define MTB_DebugBreak() do { __debugbreak(); } while(0)
   #else
-    #define MTB_DebugBreak MTB_NOP
+    #define MTB_DebugBreak() MTB_NOP
   #endif
 #endif
 
-#if !defined(MTB_Exceptions)
-  #define MTB_Exceptions MTB_Off
+#if !defined(MTB_HAS_EXCEPTIONS)
+  #define MTB_HAS_EXCEPTIONS 0
 #endif
 
 // For STL
 // NOTE: Don't undef to inform the user that we're overwriting their settings
 // if they specified it.
 #if !defined(_HAS_EXCEPTIONS)
-  #if MTB_IsOn(MTB_Exceptions)
+  #if MTB_HAS_EXCEPTIONS
     #define _HAS_EXCEPTIONS 1
   #else
     #define _HAS_EXCEPTIONS 0
@@ -243,26 +248,25 @@
 //
 // Primitive types.
 //
-namespace mtb
-{
-  // NOTE: These are the only types in MTB that are not prefixed.
-  using i8  = char;
-  using i16 = short;
-  using i32 = int;
-  using i64 = long long;
+// TODO: Multiple platforms.
 
-  using u8  = unsigned char;
-  using u16 = unsigned short;
-  using u32 = unsigned int;
-  using u64 = unsigned long long;
+using mtb_int = signed int;
+using mtb_uint = unsigned int;
 
-  using f32 = float;
-  using f64 = double;
+using mtb_s08 = signed char;
+using mtb_s16 = signed short;
+using mtb_s32 = signed int;
+using mtb_s64 = signed long long;
 
-  using bool32 = i32;
+using mtb_u08 = unsigned char;
+using mtb_u16 = unsigned short;
+using mtb_u32 = unsigned int;
+using mtb_u64 = unsigned long long;
 
-  /// Generic types if no specific size/precision is required.
-  using uint = unsigned int;
-} // namespace mtb
+using mtb_f32 = float;
+using mtb_f64 = double;
+
+using mtb_byte = mtb_u08;
+
 
 #endif // !defined(MTB_HEADER_mtb_platform)
