@@ -49,19 +49,19 @@ bool mtb_OnFailedCheck(
     } while(0)
 #endif
 
-#define MTB_ASSERT_TYPE_UNKNOWN 0
-#define MTB_ASSERT_TYPE_DEBUG   10
-#define MTB_ASSERT_TYPE_DEV     20
-#define MTB_ASSERT_TYPE_RELEASE 30
+#define MTB_ASSERT_LEVEL_UNKNOWN 0
+#define MTB_ASSERT_LEVEL_DEBUG   10
+#define MTB_ASSERT_LEVEL_DEV     20
+#define MTB_ASSERT_LEVEL_RELEASE 30
 
 // Set a default value if none is set.
-#if !defined(MTB_CURRENT_ASSERT_TYPE)
-  #if MTB_CURRENT_BUILD == MTB_BUILD_TYPE_DEBUG
-    #define MTB_CURRENT_ASSERT_TYPE MTB_ASSERT_TYPE_DEBUG
-  #elif MTB_CURRENT_BUILD == MTB_BUILD_TYPE_DEV
-    #define MTB_CURRENT_ASSERT_TYPE MTB_ASSERT_TYPE_DEV
-  #elif MTB_CURRENT_BUILD == MTB_BUILD_TYPE_RELEASE
-    #define MTB_CURRENT_ASSERT_TYPE MTB_ASSERT_TYPE_RELEASE
+#if !defined(MTB_CURRENT_ASSERT_LEVEL)
+  #if MTB_IS_DEBUG_BUILD
+    #define MTB_CURRENT_ASSERT_LEVEL MTB_ASSERT_LEVEL_DEBUG
+  #elif MTB_IS_DEV_BUILD
+    #define MTB_CURRENT_ASSERT_LEVEL MTB_ASSERT_LEVEL_DEV
+  #elif MTB_IS_RELEASE_BUILD
+    #define MTB_CURRENT_ASSERT_LEVEL MTB_ASSERT_LEVEL_RELEASE
   #else
   #endif
 #endif
@@ -72,7 +72,7 @@ bool mtb_OnFailedCheck(
 //
 
 #if !defined(MTB_AssertDebug)
-  #if MTB_CURRENT_ASSERT_TYPE < MTB_ASSERT_TYPE_RELEASE
+  #if MTB_CURRENT_ASSERT_LEVEL < MTB_ASSERT_LEVEL_RELEASE
     #define MTB_AssertDebug MTB_Require
   #else
     #define MTB_AssertDebug(...) MTB_NOP
@@ -80,7 +80,7 @@ bool mtb_OnFailedCheck(
 #endif
 
 #if !defined(MTB_AssertDev)
-  #if MTB_CURRENT_ASSERT_TYPE < MTB_ASSERT_TYPE_RELEASE
+  #if MTB_CURRENT_ASSERT_LEVEL < MTB_ASSERT_LEVEL_RELEASE
     #define MTB_AssertDev MTB_Require
   #else
     #define MTB_AssertDev(...) MTB_NOP
@@ -88,7 +88,7 @@ bool mtb_OnFailedCheck(
 #endif
 
 #if !defined(MTB_AssertRelease)
-  #if MTB_CURRENT_ASSERT_TYPE <= MTB_ASSERT_TYPE_RELEASE
+  #if MTB_CURRENT_ASSERT_LEVEL <= MTB_ASSERT_LEVEL_RELEASE
     #define MTB_AssertRelease MTB_Require
   #else
     #define MTB_AssertRelease(...) MTB_NOP
