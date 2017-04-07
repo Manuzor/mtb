@@ -9,8 +9,8 @@
   #define MTB_IMPLEMENTATION
 #endif
 
-#include "mtb_platform.hpp"
-#include "mtb_assert.hpp"
+#include "mtb_platform.h"
+#include "mtb_assert.h"
 
 //
 // Primitive array types.

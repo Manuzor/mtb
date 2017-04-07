@@ -1,4 +1,4 @@
-#include "mtb_common.hpp"
+#include "mtb_common.h"
 
 
 static_assert(MTB_IsPod(void), "Type 'void' must be considered POD.");

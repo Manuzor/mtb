@@ -9,8 +9,8 @@
   #define MTB_IMPLEMENTATION
 #endif
 
-#include "mtb_common.hpp"
-#include "mtb_assert.hpp"
+#include "mtb_common.h"
+#include "mtb_assert.h"
 
 #include <new>
 

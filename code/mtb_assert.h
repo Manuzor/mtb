@@ -9,7 +9,7 @@
   #define MTB_IMPLEMENTATION
 #endif
 
-#include "mtb_platform.hpp"
+#include "mtb_platform.h"
 
 
 /// Returning \c true means that the a debug break is required.

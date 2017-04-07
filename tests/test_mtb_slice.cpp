@@ -1,4 +1,4 @@
-#include "mtb_slice.hpp"
+#include "mtb_slice.h"
 
 
 TEST_CASE("Slice creation", "[Slice]")

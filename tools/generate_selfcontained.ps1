@@ -5,11 +5,11 @@ param(
 )
 
 $AllHeaders = @(
-  "mtb_platform.hpp";
-  "mtb_common.hpp";
-  "mtb_assert.hpp";
-  "mtb_memory.hpp";
-  "mtb_conv.hpp";
+  "mtb_platform.h";
+  "mtb_common.h";
+  "mtb_assert.h";
+  "mtb_memory.h";
+  "mtb_conv.h";
 )
 
 $RepoRoot = Join-Path -Resolve $PSScriptRoot ".."

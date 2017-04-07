@@ -9,7 +9,7 @@
   #define MTB_IMPLEMENTATION
 #endif
 
-#include "mtb_common.hpp"
+#include "mtb_common.h"
 
 
 #define MTB_DEFINE_PARSE_STRING_RESULT(NAME, VALUE_TYPE) \
@@ -170,7 +170,7 @@ MTB_INLINE mtb_to_string_result mtb_ToString(mtb_u08 Value, size_t BufferSize, c
 #if !defined(MTB_IMPL_mtb_conv)
 #define MTB_IMPL_mtb_conv
 
-#include "mtb_memory.hpp"
+#include "mtb_memory.h"
 
 static size_t
 mtb_TrimWhitespaceFront(size_t* SourceLen, char const** SourcePtr)
