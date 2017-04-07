@@ -126,62 +126,89 @@
   #endif
 #endif
 
+
 //
 // Determine the current type of build
 //
+
 #define MTB_BUILD_TYPE_UNKNOWN 0
 #define MTB_BUILD_TYPE_DEBUG   10
-#define MTB_BUILD_TYPE_DEVELOP 20
+#define MTB_BUILD_TYPE_DEV     20
 #define MTB_BUILD_TYPE_RELEASE 30
 
-// Try to automatically determine a debug build if the user did not specify anything.
-#if !defined(MTB_IS_DEBUG_BUILD)
+#if defined(MTB_CURRENT_BUILD)
+  #error MTB_CURRENT_BUILD must not be set manually.
+#endif
+
+
+//
+// Handle manual MTB_IS_*_BUILD setting.
+//
+
+#if defined(MTB_IS_DEBUG_BUILD) || defined(MTB_IS_DEV_BUILD) || defined(MTB_IS_RELEASE_BUILD)
+  #if MTB_IS_DEBUG_BUILD
+    #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_DEBUG
+  #elif MTB_IS_DEV_BUILD
+    #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_DEV
+    #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_RELEASE
+  #elif
+    #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_UNKNOWN
+  #endif
+#endif
+
+
+//
+// Try to automatically determine the current build type if non is set at this point.
+//
+
+#if !defined(MTB_CURRENT_BUILD)
   #if defined(_DEBUG) || defined(DEBUG)
+  #elif defined(NDEBUG)
+  #else
+  #endif
+#endif
+
+
+//
+// Determine the MTB_IS_*_BUILD settings if they're not already set.
+//
+
+#if !defined(MTB_IS_DEBUG_BUILD)
+  #if MTB_CURRENT_BUILD == MTB_BUILD_TYPE_DEBUG
     #define MTB_IS_DEBUG_BUILD 1
   #else
     #define MTB_IS_DEBUG_BUILD 0
   #endif
 #endif
 
-// Try to automatically determine a release build if the user did not specify anything.
+#if !defined(MTB_IS_DEV_BUILD)
+  #if MTB_CURRENT_BUILD == MTB_BUILD_TYPE_DEV
+    #define MTB_IS_DEV_BUILD 1
+  #else
+    #define MTB_IS_DEV_BUILD 0
+  #endif
+#endif
+
 #if !defined(MTB_IS_RELEASE_BUILD)
-  #if defined(NDEBUG)
+  #if MTB_CURRENT_BUILD == MTB_BUILD_TYPE_RELEASE
     #define MTB_IS_RELEASE_BUILD 1
   #else
     #define MTB_IS_RELEASE_BUILD 0
   #endif
 #endif
 
-// Try to determine a development build if the user did not specify anything.
-#if !defined(MTB_IS_DEV_BUILD)
-  #if defined(MTB_IS_RELEASE_BUILD)
-    #define MTB_IS_DEV_BUILD 0
+#if !defined(MTB_IS_INTERNAL_BUILD)
+  #if MTB_CURRENT_BUILD < MTB_BUILD_TYPE_RELEASE
+    #define MTB_IS_INTERNAL_BUILD 1
   #else
-    #define MTB_IS_DEV_BUILD 1
+    #define MTB_IS_INTERNAL_BUILD 0
   #endif
 #endif
 
 // Validate settings
 #if (MTB_IS_DEBUG_BUILD + MTB_IS_DEV_BUILD + MTB_IS_RELEASE_BUILD) > 1
+  // TODO(Manuzor): Should the MTB_IS_*_BUILD settings really be mutually exclusive?
   #error Only one of these may be set at a time: MTB_IS_DEBUG_BUILD, MTB_IS_DEV_BUILD, MTB_IS_RELEASE_BUILD
-#endif
-
-#if MTB_IS_DEBUG_BUILD
-  #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_DEBUG
-#elif MTB_IS_DEV_BUILD
-  #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_DEVELOP
-#elif MTB_IS_RELEASE_BUILD
-  #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_RELEASE
-#else
-  #error Exactly one of these must be set: MTB_IS_DEBUG_BUILD, MTB_IS_DEV_BUILD, MTB_IS_RELEASE_BUILD
-#endif
-
-#if !defined(MTB_IS_INTERNAL)
-  #if MTB_CURRENT_BUILD < MTB_BUILD_TYPE_RELEASE
-    #define MTB_IS_INTERNAL 1
-  #else
-    #define MTB_IS_INTERNAL 0
-  #endif
 #endif
 
 // Macro to enclose code that is only compiled in in the corresponding build type.

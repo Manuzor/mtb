@@ -146,6 +146,7 @@
 
       .CompilerOptions + ' /MT'
                        + ' /Ox'
+                       // + ' /DNDEBUG'
 
       .MyTarget = '$MyName$-$MyBuildId$'
       ObjectList( '$MyTarget$-obj' ) {}
