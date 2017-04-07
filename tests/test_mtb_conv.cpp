@@ -2,26 +2,22 @@
 
 
 static void
-TestFloat(char const* String, double ExpectedValue, int ExpectedRemainingNumStringElements)
+TestFloat(char const* String, double ExpectedValue, int ExpectedRemainingSourceLen)
 {
-  using namespace mtb;
-
   CAPTURE( String );
   CAPTURE( ExpectedValue );
-  CAPTURE( ExpectedRemainingNumStringElements );
+  CAPTURE( ExpectedRemainingSourceLen );
 
-  auto Source = SliceFromString(String);
-  convert_string_to_number_result<double> Result = Convert<double>(Source);
+  size_t Len = mtb_StringLengthOf(String);
+  mtb_parse_string_result_f64 Result = mtb_ParseString_f64(Len, String);
   CAPTURE( Result.Value );
   REQUIRE( Result.Success );
-  REQUIRE( AreNearlyEqual(Result.Value, ExpectedValue, 1e-10) );
-  REQUIRE( LengthOf(Result.RemainingSource) == ExpectedRemainingNumStringElements );
+  REQUIRE( mtb_AreNearlyEqual(Result.Value, ExpectedValue, 1e-10) );
+  REQUIRE( Result.RemainingSourceLen == ExpectedRemainingSourceLen );
 }
 
 TEST_CASE("String Conversion: String -> Floating Point", "[StringConversion]")
 {
-  using namespace mtb;
-
   TestFloat("1", 1.0f, 0);
   TestFloat("-1", -1.0f, 0);
   TestFloat("1.5", 1.5f, 0);
@@ -46,34 +42,31 @@ TEST_CASE("String Conversion: String -> Floating Point", "[StringConversion]")
   TestFloat("76.55.43", 76.55, 3);
   TestFloat(".3", 0.3, 0);
 
-  auto Source = SliceFromString("ABC");
-  auto Result = Convert<double>(Source);
+  char const* SourcePtr = "ABC";
+  mtb_parse_string_result_f64 Result = mtb_ParseString_f64(3, SourcePtr);
   REQUIRE( !Result.Success );
-  REQUIRE( IsNaN(Result.Value) );
-  REQUIRE( LengthOf(Result.RemainingSource) == 3 );
+  REQUIRE( mtb_IsNaN(Result.Value) );
+  REQUIRE( Result.RemainingSourceLen == 3 );
+  REQUIRE( Result.RemainingSourcePtr == SourcePtr );
 }
 
 static void
-TestInt(char const* String, mtb::i64 ExpectedValue, int ExpectedRemainingNumStringElements)
+TestInt(char const* String, mtb_s64 ExpectedValue, int ExpectedRemainingSourceLen)
 {
-  using namespace mtb;
-
   CAPTURE( String );
   CAPTURE( ExpectedValue );
-  CAPTURE( ExpectedRemainingNumStringElements );
+  CAPTURE( ExpectedRemainingSourceLen );
 
-  slice<char const> Source = SliceFromString(String);
-  convert_string_to_number_result<i64> Result = Convert<i64>(Source);
+  size_t Len = mtb_StringLengthOf(String);
+  mtb_parse_string_result_s64 Result = mtb_ParseString_s64(Len, String, -1);
   CAPTURE( Result.Value );
   REQUIRE( Result.Success );
   REQUIRE( Result.Value == ExpectedValue );
-  REQUIRE( LengthOf(Result.RemainingSource) == ExpectedRemainingNumStringElements );
+  REQUIRE( Result.RemainingSourceLen == ExpectedRemainingSourceLen );
 }
 
 TEST_CASE("String Conversion: String -> Integer", "[StringConversion]")
 {
-  using namespace mtb;
-
   TestInt("1", 1, 0);
   TestInt("-1", -1, 0);
   TestInt("400000000", 400000000, 0);
@@ -83,26 +76,27 @@ TEST_CASE("String Conversion: String -> Integer", "[StringConversion]")
   TestInt("\n \r  \t23443A", 23443, 1);
   TestInt("76.55.43", 76, 6);
 
-  auto Source = SliceFromString("ABC");
-  auto Result = Convert<i64>(Source);
+  char const* SourcePtr = "ABC";
+  mtb_parse_string_result_s64 Result = mtb_ParseString_s64(3, SourcePtr, -1);
   REQUIRE( !Result.Success );
-  REQUIRE( Result.Value == 0 );
-  REQUIRE( LengthOf(Result.RemainingSource) == 3 );
+  REQUIRE( Result.Value == -1 );
+  REQUIRE( Result.RemainingSourceLen == 3 );
+  REQUIRE( Result.RemainingSourcePtr == SourcePtr );
 }
 
 TEST_CASE("String Conversion: Integer -> String", "[StringConversion]")
 {
-  using namespace mtb;
+  char Buffer[32]{};
+  mtb_to_string_result Result;
 
-  char FixedBuffer[32]{};
-  auto Buffer = Slice(FixedBuffer);
-  convert_number_to_string_result Result;
-
-  Result = Convert<slice<char>>((int)42, Buffer);
+  Result = mtb_ToString(42, 32, Buffer);
+  CAPTURE( Result );
   REQUIRE( Result.Success );
-  REQUIRE( Result.Value == "42"_S );
+  REQUIRE( mtb_StringsAreEqual(Result.StrLen, Result.StrPtr, "42") );
 
-  Result = Convert<slice<char>>((int)0, Buffer);
+  Result = mtb_ToString(0, 32, Buffer);
+  CAPTURE( Result );
   REQUIRE( Result.Success );
-  REQUIRE( Result.Value == "0"_S );
+  REQUIRE( mtb_StringsAreEqual(Result.StrLen, Result.StrPtr, "0") );
 }
+

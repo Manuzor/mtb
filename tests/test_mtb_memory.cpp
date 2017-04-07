@@ -28,7 +28,7 @@ TEST_CASE("Memory Construction", "[Memory]")
 
     SECTION("Default construct array")
     {
-      mtb_ConstructElements(mtb_LengthOf(Pods), Pods);
+      mtb_ConstructElements(mtb_ArrayLengthOf(Pods), Pods);
       REQUIRE( Pods[0] == 0 );
       REQUIRE( Pods[1] == 0 );
       REQUIRE( Pods[2] == 0 );
@@ -37,7 +37,7 @@ TEST_CASE("Memory Construction", "[Memory]")
 
     SECTION("Construct array with value")
     {
-      mtb_ConstructElements(mtb_LengthOf(Pods), Pods, 42);
+      mtb_ConstructElements(mtb_ArrayLengthOf(Pods), Pods, 42);
       REQUIRE( Pods[0] == 42 );
       REQUIRE( Pods[1] == 42 );
       REQUIRE( Pods[2] == 42 );
@@ -45,7 +45,7 @@ TEST_CASE("Memory Construction", "[Memory]")
 
       SECTION("Destruct array")
       {
-        mtb_DestructElements(mtb_LengthOf(Pods), Pods);
+        mtb_DestructElements(mtb_ArrayLengthOf(Pods), Pods);
         // Should not do anything for PODs.
         REQUIRE( Pods[0] == 42 );
         REQUIRE( Pods[1] == 42 );
@@ -82,30 +82,30 @@ TEST_CASE("Memory Construction", "[Memory]")
 
 
     foo Foos[4];
-    REQUIRE( Counters->Ctor == 1 * mtb_LengthOf(Foos) );
-    REQUIRE( Counters->Dtor == 0 * mtb_LengthOf(Foos) );
+    REQUIRE( Counters->Ctor == 1 * mtb_ArrayLengthOf(Foos) );
+    REQUIRE( Counters->Dtor == 0 * mtb_ArrayLengthOf(Foos) );
 
-    mtb_SetBytes(mtb_ByteLengthOf(Foos), Foos, 0);
+    mtb_SetBytes(mtb_ArrayByteSizeOf(Foos), Foos, 0);
 
-    mtb_ConstructElements(mtb_LengthOf(Foos), Foos);
-    REQUIRE( Counters->Ctor == 2 * mtb_LengthOf(Foos) );
-    REQUIRE( Counters->Dtor == 0 * mtb_LengthOf(Foos) );
+    mtb_ConstructElements(mtb_ArrayLengthOf(Foos), Foos);
+    REQUIRE( Counters->Ctor == 2 * mtb_ArrayLengthOf(Foos) );
+    REQUIRE( Counters->Dtor == 0 * mtb_ArrayLengthOf(Foos) );
     REQUIRE( Foos[0].Data == 0 );
     REQUIRE( Foos[1].Data == 0 );
     REQUIRE( Foos[2].Data == 0 );
     REQUIRE( Foos[3].Data == 0 );
 
-    mtb_ConstructElements(mtb_LengthOf(Foos), Foos, mtb_u08(42));
-    REQUIRE( Counters->Ctor == 3 * mtb_LengthOf(Foos) );
-    REQUIRE( Counters->Dtor == 0 * mtb_LengthOf(Foos) );
+    mtb_ConstructElements(mtb_ArrayLengthOf(Foos), Foos, mtb_u08(42));
+    REQUIRE( Counters->Ctor == 3 * mtb_ArrayLengthOf(Foos) );
+    REQUIRE( Counters->Dtor == 0 * mtb_ArrayLengthOf(Foos) );
     REQUIRE( Foos[0].Data == 42 );
     REQUIRE( Foos[1].Data == 42 );
     REQUIRE( Foos[2].Data == 42 );
     REQUIRE( Foos[3].Data == 42 );
 
-    mtb_DestructElements(mtb_LengthOf(Foos), Foos);
-    REQUIRE( Counters->Ctor == 3 * mtb_LengthOf(Foos) );
-    REQUIRE( Counters->Dtor == 1 * mtb_LengthOf(Foos) );
+    mtb_DestructElements(mtb_ArrayLengthOf(Foos), Foos);
+    REQUIRE( Counters->Ctor == 3 * mtb_ArrayLengthOf(Foos) );
+    REQUIRE( Counters->Dtor == 1 * mtb_ArrayLengthOf(Foos) );
     REQUIRE( Foos[0].Data == 42 );
     REQUIRE( Foos[1].Data == 42 );
     REQUIRE( Foos[2].Data == 42 );

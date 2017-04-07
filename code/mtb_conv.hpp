@@ -10,107 +10,125 @@
 #endif
 
 #include "mtb_common.hpp"
-#include "mtb_slice.hpp"
 
-namespace mtb
-{
 
-template<typename T>
-struct convert_string_to_number_result
-{
-  // Whether conversion was successful or not.
-  bool Success;
-
-  // The actual value.
-  T Value;
-
-  // What is left after parsing the value.
-  slice<char const> RemainingSource;
-};
+#define MTB_DEFINE_PARSE_STRING_RESULT(NAME, VALUE_TYPE) \
+struct NAME \
+{ \
+  bool Success; \
+  size_t RemainingSourceLen; \
+  char const* RemainingSourcePtr; \
+  VALUE_TYPE Value; \
+}
 
 
 //
-// Conversion: String -> Floating Point
+// Convert: String -> Floating point
 //
 
-convert_string_to_number_result<double>
-ImplConvertStringToDouble(slice<char const> Source, double Fallback);
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_f64, mtb_f64);
+mtb_parse_string_result_f64
+mtb_ParseString_f64(size_t SourceLen, char const* SourcePtr, mtb_f64 Fallback = MTB_NaN_f64);
 
-template<typename FloatType>
-struct impl_convert_string_to_floating_point_helper
+
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_f32, mtb_f32);
+MTB_INLINE mtb_parse_string_result_f32
+mtb_ParseString_f32(size_t SourceLen, char const* SourcePtr, mtb_f32 Fallback = MTB_NaN_f64)
 {
-  template<typename CharType>
-  static inline convert_string_to_number_result<FloatType>
-  Do(slice<CharType> Source, FloatType Fallback = NaN<FloatType>())
-  {
-    auto StringToDoubleResult = ImplConvertStringToDouble(Coerce<slice<char const>>(Source), Cast<double>(Fallback));
-    convert_string_to_number_result<FloatType> Result;
-    Result.Success = StringToDoubleResult.Success;
-    Result.Value = (FloatType)StringToDoubleResult.Value;
-    Result.RemainingSource = StringToDoubleResult.RemainingSource;
-    return Result;
-  }
-};
+  mtb_parse_string_result_f64 Result_f64 = mtb_ParseString_f64(SourceLen, SourcePtr, (mtb_f64)Fallback);
+  mtb_parse_string_result_f32 Result_f32{ Result_f64.Success, Result_f64.RemainingSourceLen, Result_f64.RemainingSourcePtr };
+  Result_f32.Value = (mtb_f32)Result_f64.Value;
+  return Result_f32;
+}
 
-template<> struct impl_convert<double, slice<char>>        : impl_convert_string_to_floating_point_helper<double> {};
-template<> struct impl_convert<double, slice<char const>>  : impl_convert_string_to_floating_point_helper<double> {};
-template<> struct impl_convert<float,  slice<char>>        : impl_convert_string_to_floating_point_helper<float>  {};
-template<> struct impl_convert<float,  slice<char const>>  : impl_convert_string_to_floating_point_helper<float>  {};
 
 //
-// Conversion: String -> Integer
+// Convert: String -> Unsigned integers
 //
 
-convert_string_to_number_result<u64>
-ImplConvertStringToInteger(slice<char const> Source, u64 Fallback);
-
-convert_string_to_number_result<i64>
-ImplConvertStringToInteger(slice<char const> Source, i64 Fallback);
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_u64, mtb_u64);
+mtb_parse_string_result_u64
+mtb_ParseString_u64(size_t SourceLen, char const* SourcePtr, mtb_u64 Fallback);
 
 
-template<typename MaxIntegerType, typename IntegerType>
-struct impl_convert_string_to_integer_helper
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_u32, mtb_u32);
+MTB_INLINE mtb_parse_string_result_u32
+mtb_ParseString_u32(size_t SourceLen, char const* SourcePtr, mtb_u32 Fallback)
 {
-  template<typename CharType>
-  static inline convert_string_to_number_result<IntegerType>
-  Do(slice<CharType> String, IntegerType Fallback = 0)
-  {
-    auto StringToIntResult = ImplConvertStringToInteger(Coerce<slice<char const>>(String), Cast<MaxIntegerType>(Fallback));
-    convert_string_to_number_result<IntegerType> Result;
-    Result.Success = StringToIntResult.Success;
-    Result.Value = Convert<IntegerType>(StringToIntResult.Value);
-    Result.RemainingSource = StringToIntResult.RemainingSource;
-    return Result;
-  }
-};
+  mtb_parse_string_result_u64 Result_u64 = mtb_ParseString_u64(SourceLen, SourcePtr, Fallback);
+  mtb_parse_string_result_u32 Result_u32{ Result_u64.Success, Result_u64.RemainingSourceLen, Result_u64.RemainingSourcePtr };
+  Result_u32.Value = mtb_SafeConvert_u32(Result_u64.Value);
+}
 
-template<> struct impl_convert<i8,  slice<char>>       : impl_convert_string_to_integer_helper<i64, i8>  {};
-template<> struct impl_convert<i8,  slice<char const>> : impl_convert_string_to_integer_helper<i64, i8>  {};
-template<> struct impl_convert<i16, slice<char>>       : impl_convert_string_to_integer_helper<i64, i16> {};
-template<> struct impl_convert<i16, slice<char const>> : impl_convert_string_to_integer_helper<i64, i16> {};
-template<> struct impl_convert<i32, slice<char>>       : impl_convert_string_to_integer_helper<i64, i32> {};
-template<> struct impl_convert<i32, slice<char const>> : impl_convert_string_to_integer_helper<i64, i32> {};
-template<> struct impl_convert<i64, slice<char>>       : impl_convert_string_to_integer_helper<i64, i64> {};
-template<> struct impl_convert<i64, slice<char const>> : impl_convert_string_to_integer_helper<i64, i64> {};
 
-template<> struct impl_convert<u8,  slice<char>>       : impl_convert_string_to_integer_helper<u64, u8>  {};
-template<> struct impl_convert<u8,  slice<char const>> : impl_convert_string_to_integer_helper<u64, u8>  {};
-template<> struct impl_convert<u16, slice<char>>       : impl_convert_string_to_integer_helper<u64, u16> {};
-template<> struct impl_convert<u16, slice<char const>> : impl_convert_string_to_integer_helper<u64, u16> {};
-template<> struct impl_convert<u32, slice<char>>       : impl_convert_string_to_integer_helper<u64, u32> {};
-template<> struct impl_convert<u32, slice<char const>> : impl_convert_string_to_integer_helper<u64, u32> {};
-template<> struct impl_convert<u64, slice<char>>       : impl_convert_string_to_integer_helper<u64, u64> {};
-template<> struct impl_convert<u64, slice<char const>> : impl_convert_string_to_integer_helper<u64, u64> {};
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_u16, mtb_u16);
+MTB_INLINE mtb_parse_string_result_u16
+mtb_ParseString_u16(size_t SourceLen, char const* SourcePtr, mtb_u16 Fallback)
+{
+  mtb_parse_string_result_u64 Result_u64 = mtb_ParseString_u64(SourceLen, SourcePtr, Fallback);
+  mtb_parse_string_result_u16 Result_u16{ Result_u64.Success, Result_u64.RemainingSourceLen, Result_u64.RemainingSourcePtr };
+  Result_u16.Value = mtb_SafeConvert_u16(Result_u64.Value);
+}
+
+
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_u08, mtb_u08);
+MTB_INLINE mtb_parse_string_result_u08
+mtb_ParseString_u08(size_t SourceLen, char const* SourcePtr, mtb_u08 Fallback)
+{
+  mtb_parse_string_result_u64 Result_u64 = mtb_ParseString_u64(SourceLen, SourcePtr, Fallback);
+  mtb_parse_string_result_u08 Result_u08{ Result_u64.Success, Result_u64.RemainingSourceLen, Result_u64.RemainingSourcePtr };
+  Result_u08.Value = mtb_SafeConvert_u08(Result_u64.Value);
+}
+
+
+//
+// Convert: String -> Signed integers
+//
+
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_s64, mtb_s64);
+mtb_parse_string_result_s64
+mtb_ParseString_s64(size_t SourceLen, char const* SourcePtr, mtb_s64 Fallback);
+
+
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_s32, mtb_s32);
+MTB_INLINE mtb_parse_string_result_s32
+mtb_ParseString_s32(size_t SourceLen, char const* SourcePtr, mtb_s32 Fallback)
+{
+  mtb_parse_string_result_s64 Result_s64 = mtb_ParseString_s64(SourceLen, SourcePtr, Fallback);
+  mtb_parse_string_result_s32 Result_s32{ Result_s64.Success, Result_s64.RemainingSourceLen, Result_s64.RemainingSourcePtr };
+  Result_s32.Value = mtb_SafeConvert_s32(Result_s64.Value);
+}
+
+
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_s16, mtb_s16);
+MTB_INLINE mtb_parse_string_result_s16
+mtb_ParseString_s16(size_t SourceLen, char const* SourcePtr, mtb_s16 Fallback)
+{
+  mtb_parse_string_result_s64 Result_s64 = mtb_ParseString_s64(SourceLen, SourcePtr, Fallback);
+  mtb_parse_string_result_s16 Result_s16{ Result_s64.Success, Result_s64.RemainingSourceLen, Result_s64.RemainingSourcePtr };
+  Result_s16.Value = mtb_SafeConvert_s16(Result_s64.Value);
+}
+
+
+MTB_DEFINE_PARSE_STRING_RESULT(mtb_parse_string_result_s08, mtb_s08);
+MTB_INLINE mtb_parse_string_result_s08
+mtb_ParseString_s08(size_t SourceLen, char const* SourcePtr, mtb_s08 Fallback)
+{
+  mtb_parse_string_result_s64 Result_s64 = mtb_ParseString_s64(SourceLen, SourcePtr, Fallback);
+  mtb_parse_string_result_s08 Result_s08{ Result_s64.Success, Result_s64.RemainingSourceLen, Result_s64.RemainingSourcePtr };
+  Result_s08.Value = mtb_SafeConvert_s08(Result_s64.Value);
+}
 
 
 //
 // ==============================================
 //
 
-struct convert_number_to_string_result
+struct mtb_to_string_result
 {
   bool Success;
-  slice<char> Value;
+  size_t StrLen;
+  char* StrPtr;
 };
 
 
@@ -125,41 +143,22 @@ struct convert_number_to_string_result
 // Conversion: Integer -> String
 //
 
-convert_number_to_string_result
-ImplConvertIntegerToString(i64 Integer, slice<char> Buffer);
+mtb_to_string_result
+mtb_ToString(mtb_s64 Value, size_t BufferSize, char* BufferPtr);
 
-convert_number_to_string_result
-ImplConvertIntegerToString(u64 Integer, slice<char> Buffer);
+MTB_INLINE mtb_to_string_result mtb_ToString(mtb_s32 Value, size_t BufferSize, char* BufferPtr) { return mtb_ToString((mtb_s64)Value, BufferSize, BufferPtr); }
+MTB_INLINE mtb_to_string_result mtb_ToString(mtb_s16 Value, size_t BufferSize, char* BufferPtr) { return mtb_ToString((mtb_s64)Value, BufferSize, BufferPtr); }
+MTB_INLINE mtb_to_string_result mtb_ToString(mtb_s08 Value, size_t BufferSize, char* BufferPtr) { return mtb_ToString((mtb_s64)Value, BufferSize, BufferPtr); }
 
-template<typename MaxIntegerType, typename IntegerType>
-struct impl_convert_integer_to_string_helper
-{
-  static inline convert_number_to_string_result
-  Do(IntegerType Integer, slice<char> Buffer)
-  {
-    return ImplConvertIntegerToString((MaxIntegerType)Integer, Buffer);
-  }
-};
 
-template<> struct impl_convert<slice<char>,        i8>  : impl_convert_integer_to_string_helper<i64, i8>   {};
-template<> struct impl_convert<slice<char const>,  i8>  : impl_convert_integer_to_string_helper<i64, i8>   {};
-template<> struct impl_convert<slice<char>,        i16> : impl_convert_integer_to_string_helper<i64, i16>  {};
-template<> struct impl_convert<slice<char const>,  i16> : impl_convert_integer_to_string_helper<i64, i16>  {};
-template<> struct impl_convert<slice<char>,        i32> : impl_convert_integer_to_string_helper<i64, i32>  {};
-template<> struct impl_convert<slice<char const>,  i32> : impl_convert_integer_to_string_helper<i64, i32>  {};
-template<> struct impl_convert<slice<char>,        i64> : impl_convert_integer_to_string_helper<i64, i64>  {};
-template<> struct impl_convert<slice<char const>,  i64> : impl_convert_integer_to_string_helper<i64, i64>  {};
+mtb_to_string_result
+mtb_ToString(mtb_u64 Value, size_t BufferSize, char* BufferPtr);
 
-template<> struct impl_convert<slice<char>,        u8>  : impl_convert_integer_to_string_helper<u64, u8>  {};
-template<> struct impl_convert<slice<char const>,  u8>  : impl_convert_integer_to_string_helper<u64, u8>  {};
-template<> struct impl_convert<slice<char>,        u16> : impl_convert_integer_to_string_helper<u64, u16> {};
-template<> struct impl_convert<slice<char const>,  u16> : impl_convert_integer_to_string_helper<u64, u16> {};
-template<> struct impl_convert<slice<char>,        u32> : impl_convert_integer_to_string_helper<u64, u32> {};
-template<> struct impl_convert<slice<char const>,  u32> : impl_convert_integer_to_string_helper<u64, u32> {};
-template<> struct impl_convert<slice<char>,        u64> : impl_convert_integer_to_string_helper<u64, u64> {};
-template<> struct impl_convert<slice<char const>,  u64> : impl_convert_integer_to_string_helper<u64, u64> {};
+MTB_INLINE mtb_to_string_result mtb_ToString(mtb_u32 Value, size_t BufferSize, char* BufferPtr) { return mtb_ToString((mtb_u64)Value, BufferSize, BufferPtr); }
+MTB_INLINE mtb_to_string_result mtb_ToString(mtb_u16 Value, size_t BufferSize, char* BufferPtr) { return mtb_ToString((mtb_u64)Value, BufferSize, BufferPtr); }
+MTB_INLINE mtb_to_string_result mtb_ToString(mtb_u08 Value, size_t BufferSize, char* BufferPtr) { return mtb_ToString((mtb_u64)Value, BufferSize, BufferPtr); }
 
-} // namespace mtb
+
 #endif // !defined(MTB_HEADER_mtb_conv)
 
 
@@ -171,107 +170,120 @@ template<> struct impl_convert<slice<char const>,  u64> : impl_convert_integer_t
 #if !defined(MTB_IMPL_mtb_conv)
 #define MTB_IMPL_mtb_conv
 
+#include "mtb_memory.hpp"
 
-static mtb::slice<char const>
-mtb_TrimWhitespaceFront(mtb::slice<char const> String)
+static size_t
+mtb_TrimWhitespaceFront(size_t* SourceLen, char const** SourcePtr)
 {
-  using namespace mtb;
+  size_t Len = *SourceLen;
+  char const* Ptr = *SourcePtr;
 
-  while(true)
+  while(Len && mtb_IsWhitespace(Ptr[0]))
   {
-    if(LengthOf(String) == 0)
-      return String;
-
-    if(!IsWhitespace(String[0]))
-      return String;
-
-    String = TrimFront(String, 1);
+    ++Ptr;
+    --Len;
   }
+
+  size_t LenTrimmed = *SourceLen - Len;
+  *SourceLen = Len;
+  *SourcePtr = Ptr;
+  return LenTrimmed;
 }
 
-/// If a '+' was consumed, `1` is returned and \a OriginalSource is advanced by 1,
-/// else, if a '-' was consumed, `-1` is returned and \a OriginalSource is advanced by 1,
-/// otherwise 0 is returned and Source will not be modified.
+/// If a '+' was consumed, `1` is returned and \a SourcePtr is advanced by 1,
+/// else, if a '-' was consumed, `-1` is returned and \a SourcePtr is advanced by 1,
+/// otherwise 0 is returned and \a SourcePtr will not be modified.
 static int
-mtb_ConsumeSign(mtb::slice<char const>* Source)
+mtb_ConsumeSign(size_t* SourceLen, char const** SourcePtr)
 {
   int Result{};
+  size_t Len = *SourceLen;
+  char const* Ptr = *SourcePtr;
 
-  if(*Source)
+  if(Len)
   {
-    if((*Source)[0] == '+')
+    if(Ptr[0] == '+')
     {
-      *Source = TrimFront(*Source, 1);
+      ++Ptr;
+      --Len;
       Result = 1;
     }
-    else if((*Source)[0] == '-')
+    else if(Ptr[0] == '-')
     {
-      *Source = TrimFront(*Source, 1);
+      ++Ptr;
+      --Len;
       Result = -1;
     }
   }
 
+  *SourceLen = Len;
+  *SourcePtr = Ptr;
   return Result;
 }
 
-auto mtb::
-ImplConvertStringToDouble(slice<char const> Source, double Fallback)
-  -> convert_string_to_number_result<double>
+mtb_parse_string_result_f64
+mtb_ParseString_f64(size_t SourceLen, char const* SourcePtr, mtb_f64 Fallback)
 {
-  convert_string_to_number_result<double> Result;
-  Result.Success = false;
+  mtb_parse_string_result_f64 Result{};
   Result.Value = Fallback;
-  Result.RemainingSource = Source;
+  Result.RemainingSourceLen = SourceLen;
+  Result.RemainingSourcePtr = SourcePtr;
 
-  Source = mtb_TrimWhitespaceFront(Source);
-  if(Source)
+  size_t Len = SourceLen;
+  char const* Ptr = SourcePtr;
+
+  mtb_TrimWhitespaceFront(&Len, &Ptr);
+  if(Len)
   {
-    bool HasSign = mtb_ConsumeSign(&Source) < 0;
+    bool HasSign = mtb_ConsumeSign(&Len, &Ptr) < 0;
 
-    if(Source)
+    // Parse all parts of a floating point number.
+    if(Len)
     {
-      // Parse all parts of a floating point numbers
-      convert_string_to_number_result<u64> NumericResult;
-      convert_string_to_number_result<u64> ExponentResult;
-
-      // Numeric part
-      NumericResult = Convert<u64>(Source, 0.0f);
-      Source = NumericResult.RemainingSource;
-      double Value = NumericResult.Value;
+      // Leneric part
+      mtb_parse_string_result_u64 LenericResult = mtb_ParseString_u64(Len, Ptr, 0.0f);
+      Len = LenericResult.RemainingSourceLen;
+      Ptr = LenericResult.RemainingSourcePtr;
+      double Value = (double)LenericResult.Value;
 
       // Decimal part
-      bool HasDecimalPart{};
-      u64 DecimalValue{};
-      u64 DecimalDivider = 1;
-      if(Source && Source[0] == '.')
+      bool HasDecimalPart = false;
+      mtb_u64 DecimalValue = 0;
+      mtb_u64 DecimalDivider = 1;
+      if(Len && Ptr[0] == '.')
       {
-        Source = TrimFront(Source, 1);
-        while(Source && IsDigit(Source[0]))
+        ++Ptr;
+        --Len;
+        while(Len && mtb_IsDigit(Ptr[0]))
         {
-          u64 NewDigit = (u64)(Source[0] - '0');
+          mtb_u64 NewDigit = (mtb_u64)(Ptr[0] - '0');
           DecimalValue = (10 * DecimalValue) + NewDigit;
           HasDecimalPart = true;
           DecimalDivider *= 10;
-          Source = TrimFront(Source, 1);
+          ++Ptr;
+          --Len;
         }
 
         Value += (double)DecimalValue / (double)DecimalDivider;
       }
 
-      if(NumericResult.Success || HasDecimalPart)
+      if(LenericResult.Success || HasDecimalPart)
       {
         // Parse exponent, if any.
-        if(Source && (Source[0] == 'e' || Source[0] == 'E'))
+        if(Len && (Ptr[0] == 'e' || Ptr[0] == 'E'))
         {
-          auto ExponentSource = TrimFront(Source, 1);
-          bool ExponentHasSign = mtb_ConsumeSign(&ExponentSource) < 0;
-          ExponentResult = Convert<u64>(ExponentSource);
+          size_t ExponentSourceLen = Len - 1;
+          char const* ExponentSourcePtr = Ptr + 1;
+          bool ExponentHasSign = mtb_ConsumeSign(&ExponentSourceLen, &ExponentSourcePtr) < 0;
+
+          mtb_parse_string_result_u64 ExponentResult = mtb_ParseString_u64(ExponentSourceLen, ExponentSourcePtr, -1);
           if(ExponentResult.Success)
           {
-            Source = ExponentResult.RemainingSource;
+            Len = ExponentResult.RemainingSourceLen;
+            Ptr = ExponentResult.RemainingSourcePtr;
 
-            u64 ExponentPart = ExponentResult.Value;
-            i64 ExponentValue = 1;
+            mtb_u64 ExponentPart = ExponentResult.Value;
+            mtb_s64 ExponentValue = 1;
             while(ExponentPart > 0)
             {
               ExponentValue *= 10;
@@ -284,7 +296,8 @@ ImplConvertStringToDouble(slice<char const> Source, double Fallback)
         }
 
         Result.Success = true;
-        Result.RemainingSource = Source;
+        Result.RemainingSourceLen = Len;
+        Result.RemainingSourcePtr = Ptr;
         Result.Value = HasSign ? -Value : Value;
       }
     }
@@ -293,147 +306,176 @@ ImplConvertStringToDouble(slice<char const> Source, double Fallback)
   return Result;
 }
 
-template<typename IntegerType>
-mtb::convert_string_to_number_result<IntegerType>
-ImplConvertStringToIntegerHelper(mtb::slice<char const> Source, IntegerType Fallback)
+mtb_parse_string_result_u64
+mtb_ParseString_u64(size_t SourceLen, char const* SourcePtr, mtb_u64 Fallback)
 {
-  using namespace mtb;
-
-  convert_string_to_number_result<IntegerType> Result;
-  Result.Success = false;
+  mtb_parse_string_result_u64 Result{};
   Result.Value = Fallback;
-  Result.RemainingSource = Source;
+  Result.RemainingSourceLen = SourceLen;
+  Result.RemainingSourcePtr = SourcePtr;
 
-  if(Source)
+  size_t Len = SourceLen;
+  char const* Ptr = SourcePtr;
+
+  if(Len)
   {
-    Source = mtb_TrimWhitespaceFront(Source);
-
-    bool HasSign = false;
-    switch(Source[0])
+    mtb_TrimWhitespaceFront(&Len, &Ptr);
+    bool HasSign = mtb_ConsumeSign(&Len, &Ptr) < 0;
+    if(!HasSign)
     {
-    case '+':
-      Source = TrimFront(Source, 1);
-      break;
-    case '-':
-      HasSign = true;
-      Source = TrimFront(Source, 1);
-      break;
-    default:
-      break;
-    }
+      mtb_u64 NumericalPart = 0;
+      bool HasNumericalPart = false;
 
-    u64 NumericalPart = 0;
-    bool HasNumericalPart = false;
-
-    while(LengthOf(Source) > 0 && IsDigit(Source[0]))
-    {
-      NumericalPart *= 10;
-      NumericalPart += Source[0] - '0';
-      HasNumericalPart = true;
-      Source = TrimFront(Source, 1);
-    }
-
-    if(HasNumericalPart)
-    {
-      auto Value = Convert<IntegerType>(NumericalPart);
-
-      if(HasSign)
+      while(Len && mtb_IsDigit(Ptr[0]))
       {
-        if(IntIsSigned<IntegerType>())
-        {
-          Result.Value = Negate(Value);
-          Result.Success = true;
-        }
-        else
-        {
-          // Unsigned types cannot have a '-' sign.
-        }
+        NumericalPart = (10 * NumericalPart) + (*Ptr - '0');
+        HasNumericalPart = true;
+        --Len;
+        ++Ptr;
       }
-      else
+
+      if(HasNumericalPart)
       {
-        Result.Value = Value;
+        Result.Value = NumericalPart;
         Result.Success = true;
       }
     }
   }
 
   if(Result.Success)
-    Result.RemainingSource = Source;
-
-  return Result;
-}
-
-auto mtb::
-ImplConvertStringToInteger(slice<char const> Source, u64 Fallback)
-  -> convert_string_to_number_result<u64>
-{
-  return ImplConvertStringToIntegerHelper<u64>(Source, Fallback);
-}
-
-auto mtb::
-ImplConvertStringToInteger(slice<char const> Source, i64 Fallback)
-  -> convert_string_to_number_result<i64>
-{
-  return ImplConvertStringToIntegerHelper<i64>(Source, Fallback);
-}
-
-template<typename IntegerType>
-mtb::convert_number_to_string_result
-ImplConvertIntegerToStringHelper(IntegerType Integer, mtb::slice<char> Buffer)
-{
-  using namespace mtb;
-
-  convert_number_to_string_result Result{};
-
-  if(Buffer)
   {
-    if(Integer == 0)
-    {
-      Buffer[0] = '0';
-      Result.Success = true;
-      Result.Value = Slice(Buffer, 0, 1);
-    }
-    else
-    {
-      size_t NumChars = 0;
-      if(Integer < 0)
-      {
-        Buffer[NumChars++] = '-';
-        Integer = Negate(Integer);
-      }
-
-      while(Integer > 0)
-      {
-        auto const Digit = (char)(Integer % 10);
-        Buffer[NumChars++] = '0' + Digit;
-        Integer /= 10;
-      }
-
-      Result.Value = Slice(Buffer, 0, NumChars);
-
-      // Result.Value now contains the digits in reverse order, so we swap them around.
-      ReverseElements(Result.Value);
-
-      Result.Success = true;
-    }
+    Result.RemainingSourceLen = Len;
+    Result.RemainingSourcePtr = Ptr;
   }
 
   return Result;
 }
 
-auto mtb::
-ImplConvertIntegerToString(i64 Integer, slice<char> Buffer)
-  -> mtb::convert_number_to_string_result
+mtb_parse_string_result_s64
+mtb_ParseString_s64(size_t SourceLen, char const* SourcePtr, mtb_s64 Fallback)
 {
-  return ImplConvertIntegerToStringHelper<i64>(Integer, Buffer);
+  mtb_parse_string_result_s64 Result{};
+  Result.Value = Fallback;
+  Result.RemainingSourceLen = SourceLen;
+  Result.RemainingSourcePtr = SourcePtr;
+
+  size_t Len = SourceLen;
+  char const* Ptr = SourcePtr;
+
+  if(Len)
+  {
+    mtb_TrimWhitespaceFront(&Len, &Ptr);
+    bool HasSign = mtb_ConsumeSign(&Len, &Ptr) < 0;
+
+    mtb_u64 NumericalPart = 0;
+    bool HasNumericalPart = false;
+
+    while(Len && mtb_IsDigit(Ptr[0]))
+    {
+      NumericalPart = (10 * NumericalPart) + (*Ptr - '0');
+      HasNumericalPart = true;
+      --Len;
+      ++Ptr;
+    }
+
+    if(HasNumericalPart)
+    {
+      if(HasSign)
+      {
+        if(NumericalPart <= (mtb_u64)MTB_MinValue_s64)
+        {
+          Result.Value = -NumericalPart;
+          Result.Success = true;
+        }
+      }
+      else
+      {
+        if(NumericalPart <= MTB_MaxValue_s64)
+        {
+          Result.Value = NumericalPart;
+          Result.Success = true;
+        }
+      }
+    }
+  }
+
+  if(Result.Success)
+  {
+    Result.RemainingSourceLen = Len;
+    Result.RemainingSourcePtr = Ptr;
+  }
+
+  return Result;
 }
 
-auto mtb::
-ImplConvertIntegerToString(u64 Integer, slice<char> Buffer)
-  -> mtb::convert_number_to_string_result
+
+mtb_to_string_result
+mtb_ToString(mtb_s64 Value, size_t BufferSize, char* BufferPtr)
 {
-  return ImplConvertIntegerToStringHelper<u64>(Integer, Buffer);
+  #if MTB_IS_INTERNAL
+    mtb_s64 OriginalValue = Value;
+  #endif
+  mtb_to_string_result Result{};
+  Result.StrPtr = BufferPtr;
+
+  if(BufferSize)
+  {
+    size_t NumChars = 0;
+    if(Value < 0)
+    {
+      BufferPtr[NumChars++] = '-';
+        // TODO: What if Value == MTB_MinValue_s64?
+      Value = -Value;
+    }
+
+    while(Value > 0)
+    {
+      char Digit = (char)(Value % 10);
+      BufferPtr[NumChars++] = '0' + Digit;
+      Value /= 10;
+    }
+
+    Result.StrLen = NumChars;
+
+      // Characters are now in reverse order, so we swap them around.
+    mtb_ReverseBytesInPlace(Result.StrLen, Result.StrPtr);
+
+    Result.Success = true;
+  }
+
+  return Result;
 }
+
+mtb_to_string_result
+mtb_ToString(mtb_u64 Value, size_t BufferSize, char* BufferPtr)
+{
+  #if MTB_IS_INTERNAL
+    mtb_u64 OriginalValue = Value;
+  #endif
+  mtb_to_string_result Result{};
+  Result.StrPtr = BufferPtr;
+
+  if(BufferSize)
+  {
+    size_t NumChars = 0;
+    while(Value > 0)
+    {
+      char Digit = (char)(Value % 10);
+      BufferPtr[NumChars++] = '0' + Digit;
+      Value /= 10;
+    }
+
+    Result.StrLen = NumChars;
+
+      // Characters are now in reverse order, so we swap them around.
+    mtb_ReverseBytesInPlace(Result.StrLen, Result.StrPtr);
+
+    Result.Success = true;
+  }
+
+  return Result;
+}
+
 
 #endif // !defined(MTB_IMPL_mtb_conv)
 #endif // defined(MTB_CONV_IMPLEMENTATION)

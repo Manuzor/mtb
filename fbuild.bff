@@ -82,8 +82,8 @@
                    // + ' User32.lib'
                    // + ' Gdi32.lib'
 
-     .CompilerInputFiles =
-     {
+    .CompilerInputFiles =
+    {
       '$RepoRoot$/tests/main.cpp'
       '$RepoRoot$/tests/tests.cpp'
       '$RepoRoot$/tests/mtb.cpp'

@@ -149,22 +149,71 @@ mtb_SafeSizeOf() { return (size_t)mtb_impl_size_of<T>::SizeInBytes; }
 /// Returns the number of elements in this static array.
 template<typename T, size_t N>
 constexpr size_t
-mtb_LengthOf(T(&)[N]) { return N; }
-
-/// Same as \c mtb_LengthOf but force to 32 bit value.
-template<typename T, size_t N>
-constexpr mtb_u32
-mtb_LengthOf32(T(&)[N]) { return (mtb_u32)N; }
+mtb_ArrayLengthOf(T(&)[N]) { return N; }
 
 /// Returns the size in bytes that the given array occupies.
 template<typename T, size_t N>
 constexpr size_t
-mtb_ByteLengthOf(T(&)[N]) { return N * mtb_SafeSizeOf<T>(); }
+mtb_ArrayByteSizeOf(T(&)[N]) { return N * sizeof(T); }
 
-/// Same as \c ByteLengthOf but force to 32 bit value.
-template<typename T, size_t N>
-constexpr mtb_u32
-mtb_ByteLengthOf32(T(&)[N]) { return (mtb_u32)N * mtb_SafeSizeOf<T>(); }
+/// Get length of the given \a String, not including the trailing zero.
+MTB_INLINE size_t
+mtb_StringByteSizeOf(char const* String)
+{
+  size_t Result = 0;
+  while(*String++) { ++Result; }
+  return Result;
+}
+
+/// Get length of the given \a String, not including the trailing zero.
+MTB_INLINE size_t
+mtb_StringLengthOf(char const* String)
+{
+  // TODO: UTF-8
+  return mtb_StringByteSizeOf(String);
+}
+
+MTB_INLINE int
+mtb_StringCompare(size_t Len, char const* PtrA, char const* PtrB)
+{
+  int Result = 0;
+
+  for(size_t ByteIndex = 0; ByteIndex < Len; ++ByteIndex)
+  {
+    if(PtrA[ByteIndex] != PtrB[ByteIndex])
+    {
+      Result = PtrA[ByteIndex] < PtrB[ByteIndex] ? -1 : 1;
+      break;
+    }
+  }
+
+  return Result;
+}
+
+MTB_INLINE int
+mtb_StringCompare(size_t LenA, char const* PtrA, size_t LenB, char const* PtrB)
+{
+  int Result = 0;
+
+  if(LenA == LenB) { Result = mtb_StringCompare(LenA, PtrA, PtrB); }
+  else             { Result = LenA < LenB ? -1 : 1; }
+
+  return Result;
+}
+
+MTB_INLINE bool
+mtb_StringsAreEqual(size_t LenA, char const* PtrA, size_t LenB, char const* PtrB)
+{
+  bool Result = mtb_StringCompare(LenA, PtrA, LenB, PtrB) == 0;
+  return Result;
+}
+
+MTB_INLINE bool
+mtb_StringsAreEqual(size_t Len, char const* PtrA, char const* PtrB)
+{
+  bool Result = mtb_StringCompare(Len, PtrA, PtrB) == 0;
+  return Result;
+}
 
 //
 // MTB_IsStrictPod
@@ -209,8 +258,8 @@ template<> struct mtb_impl_is_pod<void volatile> { static constexpr bool Value =
 #define MTB_GetNumBits(TYPE) (sizeof(TYPE)*8)
 
 
-constexpr bool IsDigit(char Value) { return Value >= '0' && Value <= '9'; }
-constexpr bool IsWhitespace(char Value) { return Value == ' '  || Value == '\n' || Value == '\r' || Value == '\t' || Value == '\b'; }
+constexpr bool mtb_IsDigit(char Value) { return Value >= '0' && Value <= '9'; }
+constexpr bool mtb_IsWhitespace(char Value) { return Value == ' '  || Value == '\n' || Value == '\r' || Value == '\t' || Value == '\b'; }
 
 //
 // NaN

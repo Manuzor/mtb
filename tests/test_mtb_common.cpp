@@ -73,12 +73,12 @@ TEST_CASE("Length of static arrays", "[Common]")
   SECTION("POD array")
   {
     int Array[42];
-    REQUIRE(mtb_LengthOf(Array) == 42);
+    REQUIRE(mtb_ArrayLengthOf(Array) == 42);
   }
 
   SECTION("String literal")
   {
-    REQUIRE(mtb_LengthOf("Foo") == 3 + 1);
+    REQUIRE(mtb_ArrayLengthOf("Foo") == 3 + 1);
   }
 }
 

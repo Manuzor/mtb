@@ -40,7 +40,7 @@
 void
 mtb_CopyBytes(size_t Size, void* Destination, void const* Source);
 
-/// Fill NumBytes in Destination with the value
+/// Fill Size in Destination with the Value.
 void
 mtb_SetBytes(size_t Size, void* Destination, int Value);
 
@@ -49,6 +49,9 @@ mtb_AreBytesEqual(size_t Size, void const* A, void const* B);
 
 int
 mtb_CompareBytes(size_t Size, void const* A, void const* B);
+
+void
+mtb_ReverseBytesInPlace(size_t Size, void* Ptr);
 
 
 /// Calls the constructor of all elements in Destination with Args.
@@ -107,6 +110,18 @@ mtb_TestMemoryOverlap(size_t NumA, TA const* A, size_t NumB, TB const* B)
 {
   return mtb_ImplTestMemoryOverlap(NumA * mtb_SafeSizeOf<TA>(), reinterpret_cast<void const*>(A),
                                    NumB * mtb_SafeSizeOf<TB>(), reinterpret_cast<void const*>(B));
+}
+
+template<typename T>
+void
+mtb_ReverseElementsInPlace(size_t Num, T* Ptr)
+{
+  size_t const NumSwaps = Num / 2;
+  for(size_t FrontIndex = 0; FrontIndex < NumSwaps; ++FrontIndex)
+  {
+    size_t const BackIndex = Num - FrontIndex - 1;
+    Swap(SomeSlice[FrontIndex], SomeSlice[BackIndex]);
+  }
 }
 
 
@@ -466,6 +481,20 @@ int
 mtb_CompareBytes(size_t Size, void const* A, void const* B)
 {
   return memcmp(A, B, Size);
+}
+
+void
+mtb_ReverseBytesInPlace(size_t Size, void* Ptr)
+{
+  mtb_byte* BytePtr = (mtb_byte*)Ptr;
+  size_t const NumSwaps = Size / 2;
+  for(size_t FrontIndex = 0; FrontIndex < NumSwaps; ++FrontIndex)
+  {
+    size_t const BackIndex = Size - FrontIndex - 1;
+    mtb_byte ToSwap = BytePtr[FrontIndex];
+    BytePtr[FrontIndex] = BytePtr[BackIndex];
+    BytePtr[BackIndex] = ToSwap;
+  }
 }
 
 bool
