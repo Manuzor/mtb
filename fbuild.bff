@@ -217,6 +217,10 @@
   [
     .MyName = 'all'
     .MyFBuildConfigToInvoke = 'all'
+    .ProjectFiles = {
+      '$RepoRoot$/tools/generate_selfcontained.ps1'
+      '$RepoRoot$/tools/generate_sublimeproject.ps1'
+    }
   ]
   .MySpecs = { .MyRegenerateSolutionSpec, .MyAllSpec }
   ForEach( .MySpec in .MySpecs )
@@ -256,7 +260,6 @@
 VSSolution( '$MySolutionName$' )
 {
   .SolutionOutput = '$MyVisualStudioRoot$/$MySolutionName$.sln'
-  .ExtraFiles = { '$RepoRoot$/code/mtb.natvis' }
 }
 
 Alias( 'vs' )

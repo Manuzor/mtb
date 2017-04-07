@@ -9,7 +9,6 @@ $AllHeaders = @(
   "mtb_common.hpp";
   "mtb_assert.hpp";
   "mtb_memory.hpp";
-  "mtb_slice.hpp";
   "mtb_conv.hpp";
 )
 
@@ -50,12 +49,14 @@ function Get-MergedSourceContent([string[]]$FullHeaderFilePaths, [string[]]$Incl
                 $IncludedFilePath = Join-Path -Resolve (Split-Path $CurrentHeaderFilePath) $IncludedFileName
                 if($IncludedFilePath -notin $IncludedFiles)
                 {
-                  $IncludedFiles += $IncludedFilePath
-                  $Separator = [string]::Format($SeparatorTemplate, $IncludedFileName)
+                  $Separator = $SeparatorTemplate -f @($IncludedFileName)
 
                   # Yield
                   $Separator
                   Get-MergedSourceContent $IncludedFilePath $IncludedFiles
+
+                  # Record inclusion
+                  $IncludedFiles += $IncludedFilePath
                 }
 
                 # Skip the include statement in any case.
