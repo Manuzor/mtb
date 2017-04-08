@@ -184,10 +184,10 @@ mtb_TrimWhitespaceFront(size_t* SourceLen, char const** SourcePtr)
     --Len;
   }
 
-  size_t LenTrimmed = *SourceLen - Len;
+  size_t NumTrimmed = *SourceLen - Len;
   *SourceLen = Len;
   *SourcePtr = Ptr;
-  return LenTrimmed;
+  return NumTrimmed;
 }
 
 /// If a '+' was consumed, `1` is returned and \a SourcePtr is advanced by 1,
@@ -240,11 +240,11 @@ mtb_ParseString_f64(size_t SourceLen, char const* SourcePtr, mtb_f64 Fallback)
     // Parse all parts of a floating point number.
     if(Len)
     {
-      // Leneric part
-      mtb_parse_string_result_u64 LenericResult = mtb_ParseString_u64(Len, Ptr, 0.0f);
-      Len = LenericResult.RemainingSourceLen;
-      Ptr = LenericResult.RemainingSourcePtr;
-      double Value = (double)LenericResult.Value;
+      // Numeric part
+      mtb_parse_string_result_u64 NumericResult = mtb_ParseString_u64(Len, Ptr, (mtb_u64)-1);
+      Len = NumericResult.RemainingSourceLen;
+      Ptr = NumericResult.RemainingSourcePtr;
+      double Value = (double)NumericResult.Value;
 
       // Decimal part
       bool HasDecimalPart = false;
@@ -267,7 +267,7 @@ mtb_ParseString_f64(size_t SourceLen, char const* SourcePtr, mtb_f64 Fallback)
         Value += (double)DecimalValue / (double)DecimalDivider;
       }
 
-      if(LenericResult.Success || HasDecimalPart)
+      if(NumericResult.Success || HasDecimalPart)
       {
         // Parse exponent, if any.
         if(Len && (Ptr[0] == 'e' || Ptr[0] == 'E'))
@@ -276,7 +276,7 @@ mtb_ParseString_f64(size_t SourceLen, char const* SourcePtr, mtb_f64 Fallback)
           char const* ExponentSourcePtr = Ptr + 1;
           bool ExponentHasSign = mtb_ConsumeSign(&ExponentSourceLen, &ExponentSourcePtr) < 0;
 
-          mtb_parse_string_result_u64 ExponentResult = mtb_ParseString_u64(ExponentSourceLen, ExponentSourcePtr, -1);
+          mtb_parse_string_result_u64 ExponentResult = mtb_ParseString_u64(ExponentSourceLen, ExponentSourcePtr, (mtb_u64)-1);
           if(ExponentResult.Success)
           {
             Len = ExponentResult.RemainingSourceLen;
@@ -382,9 +382,17 @@ mtb_ParseString_s64(size_t SourceLen, char const* SourcePtr, mtb_s64 Fallback)
     {
       if(HasSign)
       {
-        if(NumericalPart <= (mtb_u64)MTB_MinValue_s64)
+        if(NumericalPart <= (mtb_u64)MTB_MaxValue_s64 + 1)
         {
-          Result.Value = -NumericalPart;
+          if(NumericalPart == (mtb_u64)MTB_MaxValue_s64 + 1)
+          {
+            Result.Value = MTB_MinValue_s64;
+          }
+          else
+          {
+            Result.Value = -(mtb_s64)NumericalPart;
+          }
+
           Result.Success = true;
         }
       }
@@ -412,7 +420,7 @@ mtb_ParseString_s64(size_t SourceLen, char const* SourcePtr, mtb_s64 Fallback)
 mtb_to_string_result
 mtb_ToString(mtb_s64 Value, size_t BufferSize, char* BufferPtr)
 {
-  #if MTB_IS_INTERNAL
+  #if MTB_FLAG(INTERNAL)
     mtb_s64 OriginalValue = Value;
   #endif
   mtb_to_string_result Result{};
@@ -449,7 +457,7 @@ mtb_ToString(mtb_s64 Value, size_t BufferSize, char* BufferPtr)
 mtb_to_string_result
 mtb_ToString(mtb_u64 Value, size_t BufferSize, char* BufferPtr)
 {
-  #if MTB_IS_INTERNAL
+  #if MTB_FLAG(INTERNAL)
     mtb_u64 OriginalValue = Value;
   #endif
   mtb_to_string_result Result{};

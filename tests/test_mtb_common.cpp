@@ -84,7 +84,6 @@ TEST_CASE("Length of static arrays", "[Common]")
 
 TEST_CASE("mtb_IsPowerOfTwo", "[Common]")
 {
-  size_t Iteration = 0;
   for(size_t Index = 0; Index < MTB_GetNumBits(size_t); ++Index)
   {
     CAPTURE( Index );
@@ -406,4 +405,13 @@ TEST_CASE("Rounding", "[Common]")
     REQUIRE( (int)mtb_Round(-3.51f) == -4 );
     REQUIRE( (int)mtb_Round(-3.60f) == -4 );
   }
+}
+
+TEST_CASE("Concat Strings", "[Common]")
+{
+  char Buffer[128];
+  mtb_concat_strings_result Result = mtb_ConcatStrings("ABC", "DEF", mtb_ArrayLengthOf(Buffer), Buffer);
+  CAPTURE( Result.Len );
+  CAPTURE( Result.Ptr );
+  REQUIRE( mtb_StringsAreEqual("ABCDEF", Result.Ptr) );
 }

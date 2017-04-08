@@ -49,54 +49,37 @@ bool mtb_OnFailedCheck(
     } while(0)
 #endif
 
-#define MTB_ASSERT_LEVEL_UNKNOWN 0
-#define MTB_ASSERT_LEVEL_DEBUG   10
-#define MTB_ASSERT_LEVEL_DEV     20
-#define MTB_ASSERT_LEVEL_RELEASE 30
-
-// Set a default value if none is set.
-#if !defined(MTB_CURRENT_ASSERT_LEVEL)
-  #if MTB_IS_DEBUG_BUILD
-    #define MTB_CURRENT_ASSERT_LEVEL MTB_ASSERT_LEVEL_DEBUG
-  #elif MTB_IS_DEV_BUILD
-    #define MTB_CURRENT_ASSERT_LEVEL MTB_ASSERT_LEVEL_DEV
-  #elif MTB_IS_RELEASE_BUILD
-    #define MTB_CURRENT_ASSERT_LEVEL MTB_ASSERT_LEVEL_RELEASE
-  #else
-  #endif
-#endif
-
 
 //
 // Define assertion macros
 //
 
 #if !defined(MTB_AssertDebug)
-  #if MTB_CURRENT_ASSERT_LEVEL < MTB_ASSERT_LEVEL_RELEASE
+  #if MTB_FLAG(DEBUG)
     #define MTB_AssertDebug MTB_Require
   #else
     #define MTB_AssertDebug(...) MTB_NOP
   #endif
 #endif
 
-#if !defined(MTB_AssertDev)
-  #if MTB_CURRENT_ASSERT_LEVEL < MTB_ASSERT_LEVEL_RELEASE
-    #define MTB_AssertDev MTB_Require
-  #else
-    #define MTB_AssertDev(...) MTB_NOP
-  #endif
-#endif
-
 #if !defined(MTB_AssertRelease)
-  #if MTB_CURRENT_ASSERT_LEVEL <= MTB_ASSERT_LEVEL_RELEASE
+  #if MTB_FLAG(RELEASE)
     #define MTB_AssertRelease MTB_Require
   #else
     #define MTB_AssertRelease(...) MTB_NOP
   #endif
 #endif
 
+#if !defined(MTB_AssertInternal)
+  #if MTB_FLAG(INTERNAL)
+    #define MTB_AssertInternal MTB_Require
+  #else
+    #define MTB_AssertInternal(...) MTB_NOP
+  #endif
+#endif
+
 #if !defined(MTB_BoundsCheck)
-  #if MTB_IS_BOUNDS_CHECK_ENABLED
+  #if MTB_FLAG(BOUNDS_CHECKING)
     #define MTB_BoundsCheck MTB_Require
   #else
     #define MTB_BoundsCheck(...) MTB_NOP
@@ -118,12 +101,12 @@ bool mtb_OnFailedCheck(
     } while(0)
 #endif
 
-#if !defined(MTB_NotImplemented)
-  #define MTB_NotImplemented MTB_Fail("Not implemented.")
+#if !defined(MTB_NOT_IMPLEMENTED)
+  #define MTB_NOT_IMPLEMENTED MTB_Fail("Not implemented.")
 #endif
 
-#if !defined(MTB_InvalidCodePath)
-  #define MTB_InvalidCodePath MTB_Fail("Invalid code path.")
+#if !defined(MTB_INVALID_CODE_PATH)
+  #define MTB_INVALID_CODE_PATH MTB_Fail("Invalid code path.")
 #endif
 
 

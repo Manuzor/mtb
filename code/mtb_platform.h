@@ -6,6 +6,19 @@
 
 
 //
+// Clean preprocessor flags
+//
+
+#define MTB_ON +
+#define MTB_OFF -
+
+// Usage:
+//   #define MTB_FLAG_FOO MTB_ON
+//   #if MTB_FLAG(FOO) /* ... */
+#define MTB_FLAG(OP) (!!(1 MTB_FLAG_##OP 1))
+
+
+//
 // MTB_CURRENT_COMPILER
 // Determine the compiler
 //
@@ -60,20 +73,20 @@
 
 #if MTB_CURRENT_ARCH == MTB_ARCH_TYPE_x64
   #define MTB_CURRENT_ARCH_BITNESS 64
-  #define MTB_IS_LITTLE_ENDIAN 1
-  #define MTB_IS_BIG_ENDIAN 0
+  #define MTB_FLAG_LITTLE_ENDIAN MTB_ON
+  #define MTB_FLAG_BIG_ENDIAN MTB_OFF
 #elif MTB_CURRENT_ARCH == MTB_ARCH_TYPE_x86
   #define MTB_CURRENT_ARCH_BITNESS 32
-  #define MTB_IS_LITTLE_ENDIAN 1
-  #define MTB_IS_BIG_ENDIAN 0
+  #define MTB_FLAG_LITTLE_ENDIAN MTB_ON
+  #define MTB_FLAG_BIG_ENDIAN MTB_OFF
 #else
   #define MTB_CURRENT_ARCH_BITNESS 0
-  #define MTB_IS_LITTLE_ENDIAN 0
-  #define MTB_IS_BIG_ENDIAN 0
+  #define MTB_FLAG_LITTLE_ENDIAN MTB_OFF
+  #define MTB_FLAG_BIG_ENDIAN MTB_OFF
   #error "Undefined architecture."
 #endif
 
-#if !defined(MTB_CURRENT_ARCH_BITNESS) || !defined(MTB_IS_LITTLE_ENDIAN) || !defined(MTB_IS_BIG_ENDIAN)
+#if !defined(MTB_CURRENT_ARCH_BITNESS) || !defined(MTB_FLAG_LITTLE_ENDIAN) || !defined(MTB_FLAG_BIG_ENDIAN)
   #error Invalid settings.
 #endif
 
@@ -99,8 +112,9 @@
 #define MTB_IMPL_CONCAT_L1(LEFT, RIGHT) MTB_IMPL_CONCAT_L2(LEFT, RIGHT)
 #define MTB_CONCAT(LEFT, RIGHT) MTB_IMPL_CONCAT_L1(LEFT, RIGHT)
 
-#define MTB_IMPL_STRINGIFY(WHAT) #WHAT
-#define MTB_STRINGIFY(WHAT) MTB_IMPL_STRINGIFY(WHAT)
+#define MTB_IMPL_STRINGIFY_1(WHAT) #WHAT
+#define MTB_IMPL_STRINGIFY_0(WHAT) MTB_IMPL_STRINGIFY_1(WHAT)
+#define MTB_STRINGIFY(WHAT) MTB_IMPL_STRINGIFY_0(WHAT)
 
 // A no-op that can be safely terminated with a semicolon.
 #if !defined(MTB_NOP)
@@ -126,89 +140,46 @@
   #endif
 #endif
 
-
 //
-// Determine the current type of build
+// Determine build flags.
 //
-
-#define MTB_BUILD_TYPE_UNKNOWN 0
-#define MTB_BUILD_TYPE_DEBUG   10
-#define MTB_BUILD_TYPE_DEV     20
-#define MTB_BUILD_TYPE_RELEASE 30
-
-#if defined(MTB_CURRENT_BUILD)
-  #error MTB_CURRENT_BUILD must not be set manually.
-#endif
-
-
-//
-// Handle manual MTB_IS_*_BUILD setting.
-//
-
-#if defined(MTB_IS_DEBUG_BUILD) || defined(MTB_IS_DEV_BUILD) || defined(MTB_IS_RELEASE_BUILD)
-  #if MTB_IS_DEBUG_BUILD
-    #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_DEBUG
-  #elif MTB_IS_DEV_BUILD
-    #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_DEV
-    #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_RELEASE
-  #elif
-    #define MTB_CURRENT_BUILD MTB_BUILD_TYPE_UNKNOWN
+#if !defined(MTB_FLAG_RELEASE)
+  #if defined(NDEBUG)
+    #define MTB_FLAG_RELEASE MTB_ON
+  #else
+    #define MTB_FLAG_RELEASE MTB_OFF
   #endif
 #endif
 
-
-//
-// Try to automatically determine the current build type if non is set at this point.
-//
-
-#if !defined(MTB_CURRENT_BUILD)
-  #if defined(_DEBUG) || defined(DEBUG)
-  #elif defined(NDEBUG)
+#if !defined(MTB_FLAG_DEBUG)
+  #if defined(_DEBUG) || defined(DEBUG) || !MTB_FLAG(RELEASE)
+    #define MTB_FLAG_DEBUG MTB_ON
   #else
+    #define MTB_FLAG_DEBUG MTB_OFF
   #endif
 #endif
 
-
-//
-// Determine the MTB_IS_*_BUILD settings if they're not already set.
-//
-
-#if !defined(MTB_IS_DEBUG_BUILD)
-  #if MTB_CURRENT_BUILD == MTB_BUILD_TYPE_DEBUG
-    #define MTB_IS_DEBUG_BUILD 1
+#if !defined(MTB_FLAG_INTERNAL)
+  #if !MTB_FLAG(RELEASE)
+    #define MTB_FLAG_INTERNAL MTB_ON
   #else
-    #define MTB_IS_DEBUG_BUILD 0
+    #define MTB_FLAG_INTERNAL MTB_OFF
   #endif
 #endif
 
-#if !defined(MTB_IS_DEV_BUILD)
-  #if MTB_CURRENT_BUILD == MTB_BUILD_TYPE_DEV
-    #define MTB_IS_DEV_BUILD 1
+#if !defined(MTB_FLAG_BOUNDS_CHECKING)
+  #if !MTB_FLAG(RELEASE)
+    #define MTB_FLAG_BOUNDS_CHECKING MTB_ON
   #else
-    #define MTB_IS_DEV_BUILD 0
-  #endif
-#endif
-
-#if !defined(MTB_IS_RELEASE_BUILD)
-  #if MTB_CURRENT_BUILD == MTB_BUILD_TYPE_RELEASE
-    #define MTB_IS_RELEASE_BUILD 1
-  #else
-    #define MTB_IS_RELEASE_BUILD 0
-  #endif
-#endif
-
-#if !defined(MTB_IS_INTERNAL_BUILD)
-  #if MTB_CURRENT_BUILD < MTB_BUILD_TYPE_RELEASE
-    #define MTB_IS_INTERNAL_BUILD 1
-  #else
-    #define MTB_IS_INTERNAL_BUILD 0
+    #define MTB_FLAG_BOUNDS_CHECKING MTB_OFF
   #endif
 #endif
 
 // Validate settings
-#if (MTB_IS_DEBUG_BUILD + MTB_IS_DEV_BUILD + MTB_IS_RELEASE_BUILD) > 1
-  // TODO(Manuzor): Should the MTB_IS_*_BUILD settings really be mutually exclusive?
-  #error Only one of these may be set at a time: MTB_IS_DEBUG_BUILD, MTB_IS_DEV_BUILD, MTB_IS_RELEASE_BUILD
+#if !(MTB_FLAG(DEBUG) + MTB_FLAG(RELEASE) == 1)
+  #pragma message("DEBUG: " MTB_STRINGIFY(MTB_FLAG(DEBUG)))
+  #pragma message("RELEASE: " MTB_STRINGIFY(MTB_FLAG(RELEASE)))
+  #error Only one of these may be set at a time: MTB_FLAG_DEBUG, MTB_FLAG_DEV, MTB_FLAG_RELEASE
 #endif
 
 // Macro to enclose code that is only compiled in in the corresponding build type.
@@ -217,34 +188,18 @@
 //   MTB_DEBUG_CODE(auto result = ) someFunctionCall();
 //   MTB_DEBUG_CODE(if(result == 0) { /* ... */ })
 #if !defined(MTB_DEBUG_CODE)
-  #if MTB_CURRENT_BUILD <= MTB_BUILD_TYPE_DEBUG
+  #if MTB_FLAG(DEBUG)
     #define MTB_DEBUG_CODE(...) __VA_ARGS__
   #else
-    #define MTB_DEBUG_CODE(...) MTB_NOP
-  #endif
-#endif
-
-#if !defined(MTB_DEV_CODE)
-  #if MTB_CURRENT_BUILD <= MTB_BUILD_TYPE_DEV
-    #define MTB_DEV_CODE(...) __VA_ARGS__
-  #else
-    #define MTB_DEV_CODE(...) MTB_NOP
-  #endif
-#endif
-
-#if !defined(MTB_RELEASE_CODE)
-  #if MTB_CURRENT_BUILD <= MTB_BUILD_TYPE_RELEASE
-    #define MTB_RELEASE_CODE(...) __VA_ARGS__
-  #else
-    #define MTB_RELEASE_CODE(...) MTB_NOP
+    #define MTB_DEBUG_CODE(...)
   #endif
 #endif
 
 #if !defined(MTB_INTERNAL_CODE)
-  #if MTB_CURRENT_BUILD <= MTB_BUILD_TYPE_INTERNAL
+  #if MTB_FLAG(INTERNAL)
     #define MTB_INTERNAL_CODE(...) __VA_ARGS__
   #else
-    #define MTB_INTERNAL_CODE(...) MTB_NOP
+    #define MTB_INTERNAL_CODE(...)
   #endif
 #endif
 
@@ -256,15 +211,15 @@
   #endif
 #endif
 
-#if !defined(MTB_HAS_EXCEPTIONS)
-  #define MTB_HAS_EXCEPTIONS 0
+#if !defined(MTB_FLAG_HAS_EXCEPTIONS)
+  #define MTB_FLAG_HAS_EXCEPTIONS MTB_OFF
 #endif
 
 // For STL
 // NOTE: Don't undef to inform the user that we're overwriting their settings
 // if they specified it.
 #if !defined(_HAS_EXCEPTIONS)
-  #if MTB_HAS_EXCEPTIONS
+  #if MTB_FLAG(HAS_EXCEPTIONS)
     #define _HAS_EXCEPTIONS 1
   #else
     #define _HAS_EXCEPTIONS 0

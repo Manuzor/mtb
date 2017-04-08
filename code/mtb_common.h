@@ -215,6 +215,36 @@ mtb_StringsAreEqual(size_t Len, char const* PtrA, char const* PtrB)
   return Result;
 }
 
+MTB_INLINE bool
+mtb_StringsAreEqual(char const* PtrA, char const* PtrB)
+{
+  size_t LenA = mtb_StringLengthOf(PtrA);
+  size_t LenB = mtb_StringLengthOf(PtrB);
+  bool Result = mtb_StringCompare(LenA, PtrA, LenB, PtrB) == 0;
+  return Result;
+}
+
+struct mtb_concat_strings_result
+{
+  size_t Len;
+  char* Ptr;
+};
+/// Concatenate two strings of the given sizes together.
+///
+/// \return The result is pointing into the given buffer memory.
+mtb_concat_strings_result
+mtb_ConcatStrings(size_t HeadSize, char const* HeadPtr, size_t TailSize, char const* TailPtr, size_t BufferSize, char* BufferPtr);
+
+/// Concatenates two zero-terminated strings together using the given buffer.
+MTB_INLINE mtb_concat_strings_result
+mtb_ConcatStrings(char const* HeadPtr, char const* TailPtr, size_t BufferSize, char* BufferPtr)
+{
+  size_t HeadSize = mtb_StringLengthOf(HeadPtr);
+  size_t TailSize = mtb_StringLengthOf(TailPtr);
+  mtb_concat_strings_result Result = mtb_ConcatStrings(HeadSize, HeadPtr, TailSize, TailPtr, BufferSize, BufferPtr);
+  return Result;
+}
+
 //
 // MTB_IsStrictPod
 #if MTB_CURRENT_COMPILER == MTB_COMPILER_TYPE_MSVC
@@ -542,6 +572,34 @@ struct mtb_impl_defer
 #define MTB_IMPL_mtb_common
 
 #include <math.h>
+
+
+mtb_concat_strings_result
+mtb_ConcatStrings(size_t HeadSize, char const* HeadPtr, size_t TailSize, char const* TailPtr, size_t BufferSize, char* BufferPtr)
+{
+  size_t BufferIndex{};
+  size_t HeadIndex{};
+  size_t TailIndex{};
+
+  while(BufferIndex < BufferSize && HeadIndex < HeadSize)
+  {
+    BufferPtr[BufferIndex++] = HeadPtr[HeadIndex++];
+  }
+
+  while(BufferIndex < BufferSize && TailIndex < TailSize)
+  {
+    BufferPtr[BufferIndex++] = TailPtr[TailIndex++];
+  }
+
+  if(BufferIndex < BufferSize)
+  {
+    // Append the trailing zero-terminator without increasing the BufferIndex.
+    BufferPtr[BufferIndex] = '\0';
+  }
+
+  mtb_concat_strings_result Result{ BufferIndex, BufferPtr };
+  return Result;
+}
 
 mtb_f32
 mtb_Pow(mtb_f32 Base, mtb_f32 Exponent)
