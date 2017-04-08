@@ -241,7 +241,7 @@ mtb_ParseString_f64(size_t SourceLen, char const* SourcePtr, mtb_f64 Fallback)
     if(Len)
     {
       // Numeric part
-      mtb_parse_string_result_u64 NumericResult = mtb_ParseString_u64(Len, Ptr, (mtb_u64)-1);
+      mtb_parse_string_result_u64 NumericResult = mtb_ParseString_u64(Len, Ptr, 0);
       Len = NumericResult.RemainingSourceLen;
       Ptr = NumericResult.RemainingSourcePtr;
       double Value = (double)NumericResult.Value;
