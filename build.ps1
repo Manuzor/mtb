@@ -34,12 +34,30 @@ $RepoName = Split-Path $RepoRoot -Leaf
 $FBuildBFF = Join-Path $RepoRoot "fbuild.bff" -Resolve
 $WorkspaceDir = New-Item (Join-Path $RepoRoot "_workspace") -ItemType Directory -Force
 $BuildDir = New-Item (Join-Path $RepoRoot "_build") -ItemType Directory -Force
-[OperatingSystem]$OS = [Environment]::OSVersion
+
+# For powershell versions < 6.0
+if($PSVersionTable.PSVersion.Major -lt 6)
+{
+  Write-Warning "It is recommended to use at least Powershell version 6. Please visit https://github.com/PowerShell/PowerShell/releases"
+  try
+  {
+    switch([Environment]::OSVersion.Platform)
+    {
+      ([PlatformID]::Win32NT){ $IsWindows = $true }
+      ([PlatformID]::Unix)   { $IsLinux = $true }
+      ([PlatformID]::Unix)   { $IsOSX = $true }
+    }
+  }
+  catch
+  {
+    Write-Error "Unable to determine platform."
+  }
+}
 
 #
 # Find Windows SDK
 #
-if($OS.Platform -eq [PlatformID]::Win32NT)
+if($IsWindows)
 {
   <#
   Gets infos about all installed Windows SDKs sorted in descending order,
@@ -87,7 +105,7 @@ if($OS.Platform -eq [PlatformID]::Win32NT)
 #
 # Find Visual Studio
 #
-if($OS.Platform -eq [PlatformID]::Win32NT)
+if($IsWindows)
 {
   function Get-VisualStudioInfos
   {
@@ -151,7 +169,7 @@ if($RenewSystemBFF -or !(Test-Path $SystemBFFPath))
 
 "@
 
-  if($OS.Platform -eq [PlatformID]::Win32NT)
+  if($IsWindows)
   {
     $SystemBFFContent += @"
 
@@ -217,12 +235,10 @@ if(!$FBuildExe)
   Write-Host "  - '$FASTBuildWorkspaceDir'"
   if(!$IgnoreFBuildInPath) { Write-Host "  - System PATH" }
 
-  $FBuildDownloadUrl = switch($OS.Platform)
-  {
-    ([PlatformID]::Win32NT) { "http://fastbuild.org/downloads/v0.93/FASTBuild-Windows-x64-v0.93.zip" }
-    ([PlatformID]::Unix)    { "http://fastbuild.org/downloads/v0.93/FASTBuild-Linux-x64-v0.93.zip" }
-    ([PlatformID]::MacOSX)  { "http://fastbuild.org/downloads/v0.93/FASTBuild-OSX-x64-v0.93.zip" }
-  }
+  $FBuildDownloadUrl = if($IsWindows)   { "http://fastbuild.org/downloads/v0.93/FASTBuild-Windows-x64-v0.93.zip" }
+                       elseif($IsLinux) { "http://fastbuild.org/downloads/v0.93/FASTBuild-Linux-x64-v0.93.zip" }
+                       elseif($IsOSX)   { "http://fastbuild.org/downloads/v0.93/FASTBuild-OSX-x64-v0.93.zip" }
+
   $FBuildZipFile = Join-Path $FASTBuildWorkspaceDir "FASTBuild.zip"
   if(!$WhatIf)
   {
