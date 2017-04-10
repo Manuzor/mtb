@@ -243,22 +243,20 @@ if(!$FBuildExe)
   if(!$WhatIf)
   {
     Write-Host "Downloading: $FBuildDownloadUrl => $FBuildZipFile"
-    Write-Progress -Id 1 "Fetching FBuild Client" "Downloading: $FBuildDownloadUrl"
     $DownloadTime = Measure-Command {
-      (New-Object System.Net.WebClient).DownloadFile($FBuildDownloadUrl, $FBuildZipFile)
+      Invoke-WebRequest $FBuildDownloadUrl -OutFile $FBuildZipFile
     }
     Write-Host ("Downloaded in {0:N2}s." -f $DownloadTime.TotalSeconds)
 
     if(Test-Path -PathType Leaf $FBuildZipFile)
     {
       Write-Host "Unzipping: $FBuildZipFile => $FASTBuildWorkspaceDir"
-      Write-Progress -Id 1 "Fetching FBuild Client" "Unzipping: $FBuildZipFile => $FASTBuildWorkspaceDir"
       $UnzipTime = Measure-Command {
         Expand-Archive -Force $FBuildZipFile $FASTBuildWorkspaceDir
       }
       Write-Host ("Unzipped in {0:N2}s." -f $UnzipTime.TotalSeconds)
 
-      Write-Progress -Id 1 "Fetching FBuild Client" "Veryfing"
+      Write-Host "Verifying FBuild client"
       $FBuildExe = Find-FBuildExe $FASTBuildWorkspaceDir -SearchInPath:$false
       if(!$FBuildExe)
       {
