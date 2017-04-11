@@ -1,16 +1,21 @@
 #include "mtb_color.h"
 
-TEST_CASE("Color conversion", "[Color]")
+
+TEST_CASE("Color Conversion", "[Color]")
 {
-  mtb_color A = mtb_Color_CornflowerBlue;
-  mtb_color B = mtb_ToGammaColor(mtb_ToLinearColor(A));
-  REQUIRE( A.R == B.R );
-  REQUIRE( A.G == B.G );
-  REQUIRE( A.B == B.B );
-  REQUIRE( A.A == B.A );
+  SECTION("Gamma UB => Linear Float")
+  {
+    mtb_color const C1 = mtb_Color(0x64, 0x95, 0xED); // Cornflower Blue
+    mtb_linear_color const C2 = mtb_ToLinearColor(C1);
+
+    REQUIRE( mtb_AreNearlyEqual(C2.R, 0.12744f) );
+    REQUIRE( mtb_AreNearlyEqual(C2.G, 0.30054f) );
+    REQUIRE( mtb_AreNearlyEqual(C2.B, 0.84687f) );
+    REQUIRE( C2.A == 1.0f );
+  }
 }
 
-// TODO: More tests.
+// More tests.
 
 TEST_CASE("Pre-defined color values", "[Color]")
 {
