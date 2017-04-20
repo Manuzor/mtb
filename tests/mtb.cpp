@@ -1,4 +1,5 @@
 #define MTB_IMPLEMENTATION
+#include "mtb_rng.h"
 #include "mtb_color.h"
 #include "mtb_conv.h"
 // #include "mtb_slice.h"

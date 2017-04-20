@@ -407,6 +407,12 @@ TEST_CASE("Rounding", "[Common]")
   }
 }
 
+TEST_CASE("Linear Interpolation", "[Common]")
+{
+  REQUIRE( mtb_Lerp(0.0f, 1.0f, 0.5f) == 0.5f );
+}
+
+
 TEST_CASE("Concat Strings", "[Common]")
 {
   char Buffer[128];
