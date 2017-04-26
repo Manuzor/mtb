@@ -11,6 +11,7 @@ $AllHeaders = @(
   "mtb_memory.h";
   "mtb_conv.h";
   "mtb_color.h";
+  "mtb_rng.h";
 )
 
 $RepoRoot = Join-Path -Resolve $PSScriptRoot ".."

@@ -2,11 +2,13 @@
 
 TEST_CASE("Random integer generation", "[RNG]")
 {
+  mtb_rng RNG = mtb_RandomSeed(0);
+
   SECTION( "Random" )
   {
-    mtb_rng A = mtb_RandomSeed(0);
+    mtb_rng A = RNG;
     mtb_rng B = mtb_RandomSeed(0);
-    for(int Iteration = 0; Iteration < 255; ++Iteration)
+    for(int Iteration = 0; Iteration < 256; ++Iteration)
     {
       CAPTURE( Iteration );
       REQUIRE( mtb_Random_u32(&A) == mtb_Random_u32(&B) );
@@ -15,7 +17,6 @@ TEST_CASE("Random integer generation", "[RNG]")
 
   SECTION( "Random below" )
   {
-    mtb_rng RNG = mtb_RandomSeed(0);
     for (mtb_u32 OuterIteration = 0; OuterIteration < 128; ++OuterIteration)
     {
       CAPTURE( OuterIteration );
@@ -40,7 +41,6 @@ TEST_CASE("Random integer generation", "[RNG]")
 
   SECTION( "Random between" )
   {
-    mtb_rng RNG = mtb_RandomSeed(0);
     for (mtb_u32 OuterIteration = 0; OuterIteration < 128; ++OuterIteration)
     {
       CAPTURE( OuterIteration );
@@ -63,6 +63,24 @@ TEST_CASE("Random integer generation", "[RNG]")
       }
     }
   }
+
+  SECTION( "Find mtb_u08 extremes" )
+  {
+    mtb_u08 MaxValue = 0;
+    mtb_u08 MinValue = MTB_MaxValue_u08;
+    for (int Iteration = 0; Iteration < 1024; ++Iteration)
+    {
+      mtb_u32 Rand32 = mtb_RandomBetween_u32(&RNG, MTB_MinValue_u08, MTB_MaxValue_u08);
+      REQUIRE(Rand32 >= MTB_MinValue_u08);
+      REQUIRE(Rand32 <= MTB_MaxValue_u08);
+      mtb_u08 Rand = (mtb_u08)Rand32;
+      MaxValue = mtb_Max(Rand, MaxValue);
+      MinValue = mtb_Min(Rand, MinValue);
+    }
+
+    REQUIRE( MaxValue == MTB_MaxValue_u08 );
+    REQUIRE( MinValue == MTB_MinValue_u08 );
+  }
 }
 
 TEST_CASE("Random floating-point number generation", "[RNG]")
@@ -71,7 +89,7 @@ TEST_CASE("Random floating-point number generation", "[RNG]")
 
   SECTION( "Unilateral" )
   {
-    for (int Iteration = 0; Iteration < 255; ++Iteration)
+    for (int Iteration = 0; Iteration < 256; ++Iteration)
     {
       REQUIRE( mtb_RandomUnilateral_f32(&RNG) <= 1.0f );
       REQUIRE( mtb_RandomUnilateral_f32(&RNG) >= 0.0f );
@@ -80,7 +98,7 @@ TEST_CASE("Random floating-point number generation", "[RNG]")
 
   SECTION( "Bilateral" )
   {
-    for (int Iteration = 0; Iteration < 255; ++Iteration)
+    for (int Iteration = 0; Iteration < 256; ++Iteration)
     {
       REQUIRE( mtb_RandomBilateral_f32(&RNG) <= 1.0f );
       REQUIRE( mtb_RandomBilateral_f32(&RNG) >= -1.0f );
@@ -89,8 +107,7 @@ TEST_CASE("Random floating-point number generation", "[RNG]")
 
   SECTION( "Find unilateral 1.0f" )
   {
-    RNG = mtb_RandomSeed(0);
-    mtb_f32 Rand;
+    mtb_f32 Rand = 0.0f;
 
     for (mtb_u64 Iteration = 0; Iteration < 1'800'000; ++Iteration)
     {
