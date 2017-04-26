@@ -486,6 +486,18 @@ mtb_NormalizeValue(ValueT Value, LowerBoundT LowerBound, UpperBoundT UpperBound)
          (ResultT)(Value - LowerBound) / (ResultT)(UpperBound - LowerBound);
 }
 
+constexpr mtb_f32
+mtb_Lerp(mtb_f32 A, mtb_f32 B, mtb_f32 Alpha)
+{
+  return (1.0f - Alpha) * A + Alpha * B;
+}
+
+constexpr mtb_f64
+mtb_Lerp(mtb_f64 A, mtb_f64 B, mtb_f64 Alpha)
+{
+  return (1.0 - Alpha) * A + Alpha * B;
+}
+
 bool
 mtb_AreNearlyEqual(mtb_f32 A, mtb_f32 B, mtb_f32 Epsilon = 1e-4f);
 
