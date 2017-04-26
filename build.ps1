@@ -8,6 +8,7 @@ param(
   [switch]$WhatIf
 )
 
+$ErrorActionPreference = "Stop"
 function Sanitize-PathName([string]$PathName)
 {
   $PathName -replace '[/\\]+$','' # Without trailing slashes
@@ -107,43 +108,17 @@ if($IsWindows)
 #
 if($IsWindows)
 {
-  function Get-VisualStudioInfos
+  if(!(Get-Command Get-VSSetupInstance -ErrorAction Ignore))
   {
-    $KeyCandidates = @(
-      'HKLM:\SOFTWARE\Microsoft\VisualStudio';
-      'HKLM:\SOFTWARE\WOW6432Node\Microsoft\VisualStudio';
-    )
-
-    $Results = foreach($Key in $KeyCandidates)
-    {
-      if(Test-Path $Key)
-      {
-        $Infos = Get-ChildItem $Key | Get-ItemProperty
-        foreach($Info in $Infos)
-        {
-          $Version = New-Object Version
-          if([Version]::TryParse($Info.PSChildName, [ref]$Version))
-          {
-            [PSCustomObject]@{
-              "Version" = $Version
-              "RootDir" = Sanitize-PathName $Info.ShellFolder
-            }
-          }
-        }
-      }
-    }
-
-    if($Results)
-    {
-      $Results | Sort-Object { $_.Version } -Descending
-    }
+    Write-Host "Install powershell module 'VSSetup'..."
+    # Infos about VSSetup can be found here:
+    # https://blogs.msdn.microsoft.com/vcblog/2017/03/06/finding-the-visual-c-compiler-tools-in-visual-studio-2017/
+    Install-Module VSSetup -Scope CurrentUser -Force -WhatIf:$WhatIf
   }
 
-  $AllVisualStudioInfos = Get-VisualStudioInfos
-  if(!($AllVisualStudioInfos)) { Throw "Visual Studio is not installed." }
-
-  $LatestVisualStudio = $AllVisualStudioInfos[0]
-  if($LatestVisualStudio.Version.Major -lt 10) { Throw "Need at least Visual Studio 2010. Latest version found: $LatestVisualStudio" }
+  $VSInstance = Get-VSSetupInstance | Select-VSSetupInstance -Latest -Require Microsoft.VisualStudio.Component.VC.Tools.x86.x64
+  $MSVCToolsFile = Join-Path -Resolve $VSInstance.InstallationPath "VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt"
+  $MSVCVersion = New-Object System.Version (Get-Content $MSVCToolsFile).Trim()
 }
 
 #
@@ -171,14 +146,19 @@ if($RenewSystemBFF -or !(Test-Path $SystemBFFPath))
 
   if($IsWindows)
   {
+    $HostArch = "x64".ToUpper()
     $SystemBFFContent += @"
 
 // Windows specific
-.WindowsSDKDir = '$($LatestWindowsSDK.RootDir)'
-.WindowsSDKVersion = '$(Get-FullVersionString $LatestWindowsSDK.Version)'
-.VSDir = '$($LatestVisualStudio.RootDir)'
-.VSVersion = '$($LatestVisualStudio.Version)'
-.VSVersionMajor = '$($LatestVisualStudio.Version.Major)'
+.WinSDKDir = '$($LatestWindowsSDK.RootDir)'
+.WinSDKVersion = '$(Get-FullVersionString $LatestWindowsSDK.Version)'
+
+.VSDir = '$($VSInstance.InstallationPath)'
+.VSVersion = '$($VSInstance.InstallationVersion)'
+.VSVersionMajor = '$($VSInstance.InstallationVersion.Major)'
+
+.MSVCDir = '$(Join-Path -Resolve $VSInstance.InstallationPath "VC/Tools/MSVC")'
+.MSVCVersion = '$MSVCVersion'
 "@
   }
   else
@@ -286,6 +266,12 @@ else
 {
   # Move to an intermediate directory and execute from there.
   Push-Location $FASTBuildWorkspaceDir
-  & $FBuildExe -config (Join-Path $RepoRoot "fbuild.bff") $Args
-  Pop-Location
+  try
+  {
+    & $FBuildExe -config (Join-Path $RepoRoot "fbuild.bff") $Args
+  }
+  finally
+  {
+    Pop-Location
+  }
 }
