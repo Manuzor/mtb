@@ -123,12 +123,20 @@ constexpr void* mtb_AlignPointer(void* Pointer, int Alignment) { return (void*)m
 // ============================
 //
 #define MTB_Pi32     3.14159265359f
+#define MTB_TwoPi32  6.28318530718f
 #define MTB_HalfPi32 1.57079632679f
 #define MTB_InvPi32  0.31830988618f
 
+#define MTB_DegreesToRadians32 (MTB_Pi32 / 180.0f)
+#define MTB_RadiansToDegrees32 (180.0f / MTB_Pi32)
+
 #define MTB_Pi64     3.14159265359
+#define MTB_TwoPi64  6.28318530718
 #define MTB_HalfPi64 1.57079632679
 #define MTB_InvPi64  0.31830988618
+
+#define MTB_DegreesToRadians64 (MTB_Pi64 / 180.0)
+#define MTB_RadiansToDegrees64 (180.0 / MTB_Pi64)
 
 #define MTB_E32     2.71828182845f
 #define MTB_HalfE32 1.35914091423f

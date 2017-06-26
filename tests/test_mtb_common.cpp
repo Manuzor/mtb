@@ -236,6 +236,17 @@ TEST_CASE("General Conversion", "[Common]")
   REQUIRE(mtb_Convert<int>(my_conversion::bar()) == 1337);
 }
 
+TEST_CASE("Angle unit conversion", "[Common]")
+{
+  REQUIRE( 360 * MTB_DegreesToRadians32 == MTB_TwoPi32 );
+  REQUIRE( 180 * MTB_DegreesToRadians32 == MTB_Pi32 );
+  REQUIRE(  90 * MTB_DegreesToRadians32 == MTB_HalfPi32 );
+
+  REQUIRE( MTB_TwoPi32 * MTB_RadiansToDegrees32 == 360 );
+  REQUIRE( MTB_Pi32 * MTB_RadiansToDegrees32 == 180 );
+  REQUIRE( MTB_HalfPi32 * MTB_RadiansToDegrees32 ==  90 );
+}
+
 TEST_CASE("Float UNorm SNorm Conversion", "[Common]")
 {
   SECTION("mtb_u08")
