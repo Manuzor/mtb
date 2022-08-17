@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <Type Name="::mtb::arena::tBucket">
+        <DisplayString>Used={UsedSize}/{TotalSize}</DisplayString>
+        <Expand>
+            <Item Name="Used Size">UsedSize</Item>
+            <Item Name="Unused Size">TotalSize - UsedSize</Item>
+            <Item Name="Total Size">TotalSize</Item>
+            <Item Name="Next Bucket">Next</Item>
+            <Item Name="Prev Bucket">Prev</Item>
+            <Synthetic Name="[Used Data]">
+                <Expand>
+                    <ArrayItems>
+                        <Size>UsedSize</Size>
+                        <ValuePointer>Data</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="[Unused Data]">
+                <Expand>
+                    <ArrayItems>
+                        <Size>TotalSize - UsedSize</Size>
+                        <ValuePointer>Data + UsedSize</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="[All Data]">
+                <Expand>
+                    <ArrayItems>
+                        <Size>TotalSize</Size>
+                        <ValuePointer>Data</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+        </Expand>
+    </Type>
+
+    <Type Name="::mtb::arena::tArena">
+        <DisplayString>Current Bucket {*CurrentBucket}</DisplayString>
+    </Type>
+
+    <Type Name="::mtb::tSlice &lt; * &gt;">
+        <DisplayString>{{{Count} items ({Count * sizeof(*Ptr)} bytes)}}</DisplayString>
+        <Expand>
+            <ExpandedItem>Ptr,[Count]</ExpandedItem>
+        </Expand>
+    </Type>
+
+    <!-- string slices -->
+    <Type Name="::mtb::tSlice &lt; char &gt;">
+        <AlternativeType Name="::mtb::tSlice &lt; char const &gt;"/>
+        <AlternativeType Name="::mtb::tSlice &lt; const char &gt;"/>
+        <DisplayString>({Count}) {Ptr,[Count]s8}</DisplayString>
+        <StringView>Ptr,[Count]s8</StringView>
+        <Expand>
+            <Item Name="Is zero-terminated">Ptr[Count] == 0</Item>
+            <Item Name="Count">Count</Item>
+            <Item Name="Data">Ptr,[Count]</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="::mtb::tSlice &lt; wchar_t &gt;">
+        <AlternativeType Name="::mtb::tSlice &lt; wchar_t const &gt;"/>
+        <AlternativeType Name="::mtb::tSlice &lt; const wchar_t &gt;"/>
+        <DisplayString>({Count}) {Ptr,[Count]su}</DisplayString>
+        <StringView>Ptr,[Count]su</StringView>
+        <Expand>
+            <Item Name="Is zero-terminated">Ptr[Count] == 0</Item>
+            <Item Name="Count">Count</Item>
+            <Item Name="Data">Ptr,[Count]</Item>
+        </Expand>
+    </Type>
+
+    <!-- void slices -->
+    <Type Name="::mtb::tSlice &lt; void &gt;">
+        <AlternativeType Name="::mtb::tSlice &lt; void const &gt;"/>
+        <AlternativeType Name="::mtb::tSlice &lt; const void &gt;"/>
+        <DisplayString>{Count} bytes</DisplayString>
+        <Expand>
+            <ExpandedItem>(char unsigned*)Ptr,[Count]</ExpandedItem>
+        </Expand>
+    </Type>
+
+    <Type Name="::mtb::tArray &lt; * &gt;">
+        <DisplayString>{Slice}</DisplayString>
+        <Expand>
+            <Synthetic Name="[Slack]">
+                <DisplayString>{{{Capacity - Count} items ({(Capacity - Count) * sizeof(*Ptr)} bytes)}}</DisplayString>
+                <Expand>
+                    <ArrayItems>
+                        <Size>Capacity - Count</Size>
+                        <ValuePointer>Ptr + Count</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="[Allocation]">
+                <DisplayString>{{{Capacity} items ({Capacity * sizeof(*Ptr)} bytes)}}</DisplayString>
+                <Expand>
+                    <ArrayItems>
+                        <Size>Capacity</Size>
+                        <ValuePointer>Ptr</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <ExpandedItem>Slice</ExpandedItem>
+        </Expand>
+    </Type>
+
+    <Type Name="::mtb::tMap &lt; * &gt;">
+        <DisplayString>Count={Count}</DisplayString>
+        <Expand>
+            <Item Name="Capacity">Capacity</Item>
+            <Synthetic Name="Fill %">
+                <DisplayString>{(100.0 * (double)Count / (double)Capacity),f}%</DisplayString>
+            </Synthetic>
+            <Synthetic Name="[Slots]">
+                <Expand>
+                    <ArrayItems>
+                        <Size>Capacity</Size>
+                        <ValuePointer>Slots</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="[Keys]">
+                <Expand>
+                    <ArrayItems>
+                        <Size>Capacity</Size>
+                        <ValuePointer>Keys</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <Synthetic Name="[Values]">
+                <Expand>
+                    <ArrayItems>
+                        <Size>Capacity</Size>
+                        <ValuePointer>Values</ValuePointer>
+                    </ArrayItems>
+                </Expand>
+            </Synthetic>
+            <CustomListItems MaxItemsPerView="512">
+                <Variable Name="Index" InitialValue="0"/>
+                <Loop Condition="Index &lt; Capacity">
+                    <If Condition="Slots[Index].State == 1">
+                        <Item Name="{Keys[Index]}">Values[Index]</Item>
+                    </If>
+                    <Exec>++Index</Exec>
+                </Loop>
+            </CustomListItems>
+        </Expand>
+    </Type>
+
+    <Type Name="::mtb::tTimespan">
+        <DisplayString>{Nanoseconds / (1000.0*1000.0*1000.0)} s</DisplayString>
+        <Expand>
+            <Item Name="Seconds">Nanoseconds / (1000.0*1000.0*1000.0)</Item>
+            <Item Name="Milliseconds">Nanoseconds / (1000.0*1000.0)</Item>
+            <Item Name="Nanoseconds">Nanoseconds</Item>
+        </Expand>
+    </Type>
+
+</AutoVisualizer>
