@@ -1,0 +1,5 @@
+# Directories starting with an underscore are ignored.
+_*/
+
+# FASTBuild local database
+*.fdb

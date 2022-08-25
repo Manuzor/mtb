@@ -47,6 +47,7 @@
     .Compiler = '$MSVCDir$\$MSVCVersion$\bin\HostX64\x64\cl.exe'
     .CompilerOptions = ' %1 /Fo"%2" /c'
                      + ' /nologo'
+                     + ' /std:c++17'
                      + ' /WX' // Treat warnings as errors.
                      + ' /W4' // Warning level
                      + ' /wd4100' // "unreferenced formal parameter"
