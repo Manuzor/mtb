@@ -309,6 +309,7 @@ namespace mtb {
 
     // clang-format on
 
+    namespace impl {
         // clang-format off
         template<typename T> struct tDecay                    { using tType = T; };
         template<typename T> struct tDecay<T&>                { using tType = T; };
