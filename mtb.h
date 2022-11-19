@@ -73,13 +73,11 @@ save it in a `mtb.natvis` file somewhere reachable by your debugger.
 #endif
 
 // #Option
-#if !defined(MTB_USE_STB_SPRINTF)
-// Auto-detect whether stb_printf is available
-#if defined(STB_SPRINTF_H_INCLUDE)
+#if defined(MTB_USE_STB_SPRINTF) || defined(STB_SPRINTF_H_INCLUDE)
+#undef MTB_USE_STB_SPRINTF
 #define MTB_USE_STB_SPRINTF 1
-#else
+#elif !defined(MTB_USE_STB_SPRINTF)
 #define MTB_USE_STB_SPRINTF 0
-#endif
 #endif
 
 #include <float.h>  // FLT_MAX, DBL_MAX, LDBL_MAX
@@ -245,34 +243,6 @@ namespace mtb_test_dump {
     static_assert(MTB_ARRAY_SIZE(tCountSizeThing::bar) == 128);
 }
 #endif
-
-// --------------------------------------------------
-// -- #Section Defer --------------------------------
-// --------------------------------------------------
-#define MTB_DEFER auto MTB_CONCAT(_mtb_defer, __LINE__) = ::mtb::impl::DeferHelper() = [&]()
-namespace mtb::impl {
-    struct DeferHelper {
-        template<typename TDeferFunc>
-        struct Impl {
-            TDeferFunc& deferred;
-
-            Impl() = delete;
-            Impl(Impl const&) = delete;
-            Impl& operator=(Impl const&) = delete;
-            Impl& operator=(Impl&&) = delete;
-
-            inline Impl(TDeferFunc&& in_deferred)
-            : deferred{in_deferred} {}
-
-            inline ~Impl() { deferred(); }
-        };
-
-        template<typename TDeferFunc>
-        inline Impl<TDeferFunc> operator=(TDeferFunc&& in_deferred) {
-            return Impl<TDeferFunc>{(TDeferFunc&&)in_deferred};
-        }
-    };
-} // namespace mtb::impl
 
 // --------------------------------------------------
 // -- #Section POD - plain old data -----------------
@@ -582,6 +552,34 @@ namespace mtb
         tItemOps<MTB_IS_POD(T)>::Relocate(dest, dest_len, src, src_len);
     }
 } // namespace mtb
+
+// --------------------------------------------------
+// -- #Section Defer --------------------------------
+// --------------------------------------------------
+#define MTB_DEFER auto MTB_CONCAT(_mtb_defer, __LINE__) = ::mtb::impl::DeferHelper() = [&]()
+namespace mtb::impl {
+    struct DeferHelper {
+        template<typename TDeferFunc>
+        struct Impl {
+            TDeferFunc deferred;
+
+            Impl() = delete;
+            Impl(Impl const&) = delete;
+            Impl& operator=(Impl const&) = delete;
+            Impl& operator=(Impl&&) = delete;
+
+            inline Impl(TDeferFunc&& in_deferred)
+            : deferred{ForwardCast<TDeferFunc>(in_deferred)} {}
+
+            inline ~Impl() { deferred(); }
+        };
+
+        template<typename TDeferFunc>
+        inline Impl<TDeferFunc> operator=(TDeferFunc&& in_deferred) {
+            return Impl<TDeferFunc>{(TDeferFunc&&)in_deferred};
+        }
+    };
+} // namespace mtb::impl
 
 // --------------------------------------------------
 // -- #Section Slice --------------------------------
@@ -1157,6 +1155,10 @@ DOCTEST_TEST_SUITE("mtb::tSlice") {
 
 namespace mtb
 {
+    /// Changes the alignment of a pointer. The resulting pointer may be the
+    /// same as or bigger than the input pointer, but never smaller. If
+    /// inout_size is non-null, the difference between the result pointer and
+    /// the original pointer is added to it, otherwise it is ignored.
     void AlignAllocation(void** inout_ptr, size_t* inout_size, size_t alignment);
 
     template<typename T>
@@ -1245,35 +1247,29 @@ namespace mtb
     tAllocator GetLibcAllocator();
 #endif
 
+    struct tBufferAllocator {
+        tSlice<void> buf{};
+        size_t fill{};
+
+        tAllocator Allocator();
+    };
+
 #if MTB_USE_STB_SPRINTF
-    /// \remark Does not account for the null-terminator.
-    /// \return The formatted string EXCLUDING the null-terminator.
+    /// Format a string with the given arguments using stb_sprintf. The
+    /// resulting string will be zero-terminated. However, the returned slice
+    /// will NOT contain that zero-terminator. So it is safe to pass the slice
+    /// pointer to apis that expect C-strings.
     tSlice<char> vprintfAlloc(tAllocator a, char const* format, va_list vargs);
 
-    /// \remark Does not account for the null-terminator.
-    /// \return The formatted string EXCLUDING the null-terminator.
+    /// Format a string with the given arguments using stb_sprintf. The
+    //  resulting string will be zero-terminated. However, the returned slice
+    //  will NOT contain that zero-terminator. So it is safe to pass the
+    //  slice pointer to apis that expect C-strings.
     inline tSlice<char> printfAlloc(tAllocator a, char const* format, ...)
     {
         va_list vargs;
         va_start(vargs, format);
         tSlice<char> result = vprintfAlloc(a, format, vargs);
-        va_end(vargs);
-        return result;
-    }
-
-    /// \return The formatted string INCLUDING the null-terminator.
-    inline tSlice<char> vprintfAllocZ(tAllocator a, char const* format, va_list vargs)
-    {
-        tSlice<char> result = vprintfAlloc(a, format, vargs);
-        return AppendArray(a, result, PtrSlice("\0", 1));
-    }
-
-    /// \return The formatted string INCLUDING the null-terminator.
-    inline tSlice<char> printfAllocZ(tAllocator a, char const* format, ...)
-    {
-        va_list vargs;
-        va_start(vargs, format);
-        tSlice<char> result = vprintfAllocZ(a, format, vargs);
         va_end(vargs);
         return result;
     }
@@ -1451,7 +1447,7 @@ namespace mtb
     tSlice<T> InsertMany(tArray<T>& array, ptrdiff_t insert_index, tSlice<U> slice)
     {
         tSlice<T> result = InsertN(array, insert_index, slice.len, kNoInit);
-        SliceCopyConstructItems(result, slice);
+        SliceCopyBytes(result, slice);
         return result;
     }
 
@@ -1473,11 +1469,10 @@ namespace mtb
     template<typename T, typename TItem>
     tSlice<T> InsertRepeat(tArray<T>& array, ptrdiff_t insert_index, TItem item, ptrdiff_t repeat_count)
     {
-        tSlice<TItem> item_slice = PtrSlice(&item, 1);
         tSlice<T> result = InsertN(array, insert_index, repeat_count, kNoInit);
         for(ptrdiff_t index = 0; index < repeat_count; ++index)
         {
-            SliceCopyConstructItems(SliceOffset(result, index), item_slice);
+            result[index] = item;
         }
         return result;
     }
@@ -1506,7 +1501,7 @@ namespace mtb
     tSlice<T> PushMany(tArray<T>& array, tSlice<U> slice)
     {
         tSlice<T> result = PushN(array, slice.len, kNoInit);
-        SliceCopyConstructItems(result, slice);
+        SliceCopyBytes(result, slice);
         return result;
     }
 
@@ -1528,11 +1523,10 @@ namespace mtb
     template<typename T, typename TItem>
     tSlice<T> PushRepeat(tArray<T>& array, TItem item, ptrdiff_t repeat_count)
     {
-        tSlice<TItem> item_slice = PtrSlice(&item, 1);
         tSlice<T> result = PushN(array, repeat_count, kNoInit);
         for(ptrdiff_t index = 0; index < repeat_count; ++index)
         {
-            SliceCopyConstructItems(SliceOffset(result, index), item_slice);
+            result[index] = item;
         }
         return result;
     }
@@ -1580,7 +1574,7 @@ namespace mtb
         MTB_ASSERT(false);
     }
 
-    tSlice<char> ToString(tArray<char> array, bool null_terminate = true);
+    tSlice<char> ToString(tArray<char>& array, bool null_terminate = true);
 
 } // namespace mtb
 
@@ -2038,6 +2032,7 @@ namespace mtb
 // --------------------------------------------------
 // -- #Section Option -------------------------------
 // --------------------------------------------------
+#define MTB_OPTION_MOVE_SEMANTICS 0
 namespace mtb
 {
     template<typename T>
@@ -2051,11 +2046,17 @@ namespace mtb
         inline tOption()
         : has_value{false} {}
 
-        inline tOption(T InValue)
-        : has_value{true}, value{MoveCast(InValue)} {}
+        inline tOption(T in_value)
+        : has_value{true} {
+            new (&value) T(MoveCast(in_value));
+        }
 
-        inline tOption(T&& InValue)
-        : has_value{true}, value{MoveCast(InValue)} {}
+#if MTB_OPTION_MOVE_SEMANTICS
+        inline tOption(T&& in_value)
+        : has_value{true} {
+            new (&value) T(MoveCast(in_value));
+        }
+#endif
 
         inline tOption(tOption const& to_copy)
         : has_value{to_copy.has_value}
@@ -2066,14 +2067,16 @@ namespace mtb
             }
         }
 
-        inline tOption(tOption&& ToMove)
-        : has_value{ToMove.has_value}
+#if MTB_OPTION_MOVE_SEMANTICS
+        inline tOption(tOption&& to_move)
+        : has_value{to_move.has_value}
         {
-            if (ToMove.has_value)
+            if (to_move.has_value)
             {
-                new (&value) T(MoveCast(ToMove.value));
+                new (&value) T(MoveCast(to_move.value));
             }
         }
+#endif
 
         inline ~tOption()
         {
@@ -2113,26 +2116,27 @@ namespace mtb
             return *this;
         }
 
-        tOption& operator=(tOption&& ToMove)
+#if MTB_OPTION_MOVE_SEMANTICS
+        tOption& operator=(tOption&& to_move)
         {
-            if (&ToMove != this)
+            if (&to_move != this)
             {
-                if (!has_value && !ToMove.has_value)
+                if (!has_value && !to_move.has_value)
                 {
                     // value stays untouched.
                 }
-                else if (has_value && ToMove.has_value)
+                else if (has_value && to_move.has_value)
                 {
                     // we had a value, so copy directly.
-                    value = (T &&) ToMove.value;
+                    value = (T &&) to_move.value;
                 }
-                else if (!has_value && ToMove.has_value)
+                else if (!has_value && to_move.has_value)
                 {
                     // we didn't have a value before, so construct.
-                    new (&value) T((T &&) ToMove.value);
+                    new (&value) T((T &&) to_move.value);
                     has_value = true;
                 }
-                else if (has_value && !ToMove.has_value)
+                else if (has_value && !to_move.has_value)
                 {
                     // we had a value, so destroy.
                     value.~T();
@@ -2142,8 +2146,15 @@ namespace mtb
 
             return *this;
         }
+#endif
 
         constexpr operator bool() const { return has_value; }
+
+        T& Unwrap()
+        {
+            MTB_ASSERT(has_value);
+            return value;
+        }
     };
 
     template<typename T>
@@ -2156,20 +2167,6 @@ namespace mtb
     constexpr bool operator!=(tOption<T> const& a, tOption<T> const& b)
     {
         return !(a == b);
-    }
-
-    template<typename T>
-    T& Unwrap(tOption<T>& Option)
-    {
-        MTB_ASSERT(Option.has_value);
-        return Option.value;
-    }
-
-    template<typename T>
-    T Unwrap(tOption<T> Option)
-    {
-        MTB_ASSERT(Option.has_value);
-        return Option.value;
     }
 } // namespace mtb
 #endif
@@ -2259,7 +2256,7 @@ namespace mtb::arena
     tSlice<U> PushCopyArray(tArena& arena, tSlice<T> to_copy)
     {
         tSlice<U> Copy = PushArray<U>(arena, to_copy.len, kNoInit);
-        SliceCopyConstructItems(Copy, to_copy);
+        SliceCopyBytes(Copy, to_copy);
         return Copy;
     }
 
@@ -2269,7 +2266,7 @@ namespace mtb::arena
     {
         tSlice<U> ZeroTerminatedCopy = PushArray<U>(arena, to_copy.len + 1, kNoInit);
         tSlice<U> result = SliceRange(ZeroTerminatedCopy, 0, ZeroTerminatedCopy.len - 1);
-        SliceCopyConstructItems(result, to_copy);
+        SliceCopyBytes(result, to_copy);
         // set terminator element.
         new (PtrOffset(ZeroTerminatedCopy.ptr, ZeroTerminatedCopy.len - 1)) U{};
         return result;
@@ -2285,7 +2282,7 @@ namespace mtb::arena
     T* PushCopy(tArena& arena, T const& item)
     {
         T* result = PushOne<T>(arena, kNoInit);
-        SliceCopyConstructItems(PtrSlice(result, 1), PtrSlice(&item, 1));
+        SliceCopyBytes(PtrSlice(result, 1), PtrSlice(&item, 1));
         return result;
     }
 
@@ -2774,7 +2771,7 @@ void mtb::tAllocator::FreeRaw(tSlice<void> mem, size_t alignment) const
 namespace mtb::impl
 {
     tSlice<void> LibcReallocProc(void* user, tSlice<void> old_mem, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) {
-        MTB_ASSERT(old_alignment <= new_alignment && "Changing alignment is not supported");
+        MTB_ASSERT((!old_mem || old_alignment >= new_alignment) && "Changing alignment is not supported on realloc (yet?)");
 
         tSlice<void> result{};
         if(old_mem || new_size)
@@ -2811,6 +2808,65 @@ mtb::tAllocator mtb::GetLibcAllocator()
 }
 #endif
 
+namespace mtb::impl {
+    tSlice<void> BufferAllocatorReallocProc(
+        void* user,
+        tSlice<void> old_mem,
+        size_t old_alignment,
+        size_t new_size,
+        size_t new_alignment,
+        eInit init
+    ) {
+        tSlice<void> result{};
+        if(old_mem || new_size) {
+            MTB_ASSERT(user);
+            tBufferAllocator& allocator = *(tBufferAllocator*)user;
+            if(old_mem && old_mem.ptr == PtrOffset(allocator.buf.ptr, allocator.fill - old_mem.len)) {
+                // Resize is requested and old_mem is the most recent allocation.
+                void* aligned_ptr = old_mem.ptr;
+                size_t required_size = new_size;
+                AlignAllocation(&aligned_ptr, &required_size, new_alignment);
+                if(required_size > old_mem.len) {
+                    // Grow existing allocation if possible
+                    size_t delta = required_size - old_mem.len;
+                    if(allocator.fill + delta <= allocator.buf.len) {
+                        result = PtrSlice(aligned_ptr, new_size);
+                        allocator.fill += delta;
+                        if(init == kClearToZero) {
+                            SliceSetZero(SliceOffset(result, old_mem.len));
+                        }
+                    }
+                } else {
+                    // Shrink existing allocation
+                    result = PtrSlice(aligned_ptr, new_size);
+                    allocator.fill -= old_mem.len - required_size;
+                }
+            } else {
+                // Try to allocate a new slice.
+                void* aligned_ptr = PtrOffset(allocator.buf.ptr, allocator.fill);
+                size_t required_size = new_size;
+                AlignAllocation(&aligned_ptr, &required_size, new_alignment);
+                if(allocator.fill + required_size <= allocator.buf.len) {
+                    result = PtrSlice(aligned_ptr, new_size);
+                    allocator.fill += required_size;
+                    if(init == kClearToZero) {
+                        SliceSetZero(result);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+}  // namespace mtb::impl
+
+mtb::tAllocator mtb::tBufferAllocator::Allocator()
+{
+    tAllocator result;
+    result.user = this;
+    result.realloc_proc = mtb::impl::BufferAllocatorReallocProc;
+    return result;
+}
+
 #if MTB_USE_STB_SPRINTF
 namespace mtb::impl
 {
@@ -2826,7 +2882,12 @@ mtb::tSlice<char> mtb::vprintfAlloc(tAllocator a, char const* format, va_list va
     tArray<char> buffer{a};
     char temp_buffer[STB_SPRINTF_MIN];
     stbsp_vsprintfcb(impl::InternalPrintfCallback, &buffer, temp_buffer, format, vargs);
-    return ShrinkAllocation(buffer);
+    *PushOne<char>(buffer, kNoInit) = 0;
+    tSlice<char> result = ShrinkAllocation(buffer);
+    if(result.len > 0) {
+        result.len -= 1;
+    }
+    return result;
 }
 
 mtb::tSlice<char> mtb::PushFormat(tArray<char>& array, char const* format, ...)
@@ -2847,7 +2908,7 @@ mtb::tSlice<char> mtb::PushFormatV(tArray<char>& array, char const* format, va_l
 }
 #endif // MTB_USE_STB_SPRINTF
 
-mtb::tSlice<char> mtb::ToString(tArray<char> array, bool null_terminate /*= true*/)
+mtb::tSlice<char> mtb::ToString(tArray<char>& array, bool null_terminate /*= true*/)
 {
     ptrdiff_t end_offset = 0;
     if (null_terminate)
@@ -2856,7 +2917,7 @@ mtb::tSlice<char> mtb::ToString(tArray<char> array, bool null_terminate /*= true
         end_offset = 1;
     }
     ShrinkAllocation(array);
-    return SliceCast<char>(SliceRange(array.items, 0, array.len - end_offset));
+    return SliceRange(array.items, 0, array.len - end_offset);
 }
 
 void mtb::QuickSort(void* user_ptr, ptrdiff_t count, bool(*less_proc)(void*, ptrdiff_t, ptrdiff_t), void(*swap_proc)(void*, ptrdiff_t, ptrdiff_t), ptrdiff_t threshold)
@@ -3360,7 +3421,7 @@ namespace mtb::arena
     static char* InternalArenaPrintCallback(char const* buf, void* user, int len)
     {
         tArena* arena = (tArena*)user;
-        tSlice<void> dest = PushRawArray(*arena, len, 1, false);
+        tSlice<void> dest = PushRawArray(*arena, len, 1, kNoInit);
         SliceCopyBytes(dest, PtrSlice(buf, len));
         return (char*)buf;
     }
@@ -3619,7 +3680,7 @@ namespace mtb::string
     }
 
     template<typename CIn, typename COut = tRemoveConst<CIn>>
-    tSlice<COut> Impl_AllocStringCopy(tAllocator a, tSlice<CIn> str)
+    tSlice<COut> Impl_DupeString(tAllocator a, tSlice<CIn> str)
     {
         tSlice<COut> result = a.AllocArray<COut>(str.len + 1, kNoInit);
         SliceCopyBytes(result, str);
@@ -3720,7 +3781,7 @@ mtb::tSlice<char> mtb::string::AllocString(tAllocator a, size_t char_count)
 
 mtb::tSlice<char> mtb::string::DupeString(tAllocator a, tSlice<char const> str)
 {
-    return Impl_AllocStringCopy(a, str);
+    return Impl_DupeString(a, str);
 }
 
 void mtb::string::FreeString(tAllocator a, tSlice<char> str)
@@ -3811,7 +3872,7 @@ mtb::tSlice<wchar_t> mtb::string::AllocWString(tAllocator a, size_t char_count)
 
 mtb::tSlice<wchar_t> mtb::string::DupeString(tAllocator a, tSlice<wchar_t const> str)
 {
-    return Impl_AllocStringCopy(a, str);
+    return Impl_DupeString(a, str);
 }
 
 size_t mtb::string::StringLengthZ(wchar_t const* str_z)
