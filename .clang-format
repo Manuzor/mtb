@@ -1,0 +1,23 @@
+---
+BasedOnStyle: Chromium
+Language: Cpp
+AccessModifierOffset: -4
+AlignAfterOpenBracket: BlockIndent
+AlignArrayOfStructures: Right
+AlignOperands: AlignAfterOperator
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: true
+AllowShortLambdasOnASingleLine: true
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: BeforeComma
+ColumnLimit: 0
+IndentWidth: 4
+NamespaceIndentation: All
+SeparateDefinitionBlocks: Always
+SortIncludes: Never
+SpaceAfterTemplateKeyword: false
+SpaceBeforeParens: Never
+SpacesInContainerLiterals: false
+TabWidth: 4
+...
