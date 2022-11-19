@@ -251,6 +251,9 @@ MFS_FN mfs_CreateDirectoriesResult mfs_CreateDirectoriesZ(char const* path_utf8)
 #endif /* MFS__IMPLEMENTATION_GUARD */
 #define MFS__IMPLEMENTATION_GUARD
 
+#include <stdlib.h>
+#include <string.h>
+
 /*
     [Section] Backend configuration
 */
