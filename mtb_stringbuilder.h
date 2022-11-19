@@ -52,6 +52,8 @@ mstr_Allocator mstr_WrapMtbAllocator(mtb::tAllocator& allocator);
 #endif
 
 #if defined(__cplusplus)
+#include <new>
+
 namespace mstr {
     struct Builder : mstr_Builder {
         Builder() = default;
@@ -92,6 +94,9 @@ namespace mstr {
 
 #if MSTR_IMPLEMENTATION
 
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 #include <assert.h>
 #define MSTR_ASSERT(CONDITION) assert(CONDITION)
 
