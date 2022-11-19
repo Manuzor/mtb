@@ -197,14 +197,11 @@ namespace mtb
 ///       printf("Stack@0x%x: %u \n", stuff + index, stuff[index]);
 ///   }
 #define MTB_ARRAY_COUNT(ARRAY) (sizeof(::mtb::impl::ArrayCountHelper(ARRAY)))
-#define MTB_ARRAY_SIZE(ARRAY) (sizeof(::mtb::impl::ArraySizeHelper(ARRAY)))
+
 namespace mtb {
     namespace impl {
         template<typename T, size_t N>
         char (&ArrayCountHelper(T (&)[N]))[N];
-
-        template<typename T, size_t N>
-        T (&ArraySizeHelper(T (&array)[N]))[N];
     }
 
     template<typename T, size_t N>
@@ -233,14 +230,14 @@ namespace mtb_test_dump {
     struct tCountSizeThing {
         uint32_t integers[32];
         uint8_t foo[MTB_ARRAY_COUNT(integers)];
-        uint8_t bar[MTB_ARRAY_SIZE(integers)];
+        uint8_t bar[sizeof(integers)];
     };
     static_assert(MTB_ARRAY_COUNT(tCountSizeThing::integers) == 32);
-    static_assert(MTB_ARRAY_SIZE(tCountSizeThing::integers) == 128);
+    static_assert(sizeof(tCountSizeThing::integers) == 128);
     static_assert(MTB_ARRAY_COUNT(tCountSizeThing::foo) == 32);
-    static_assert(MTB_ARRAY_SIZE(tCountSizeThing::foo) == 32);
+    static_assert(sizeof(tCountSizeThing::foo) == 32);
     static_assert(MTB_ARRAY_COUNT(tCountSizeThing::bar) == 128);
-    static_assert(MTB_ARRAY_SIZE(tCountSizeThing::bar) == 128);
+    static_assert(sizeof(tCountSizeThing::bar) == 128);
 }
 #endif
 
