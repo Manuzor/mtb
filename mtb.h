@@ -207,6 +207,7 @@ namespace mtb {
 
     template<typename T, size_t N>
     inline constexpr bool IsValidIndex(T (&array)[N], ptrdiff_t index) {
+        (void)array;
         return 0 <= index && static_cast<size_t>(index) < N;
     }
 
@@ -454,6 +455,8 @@ namespace mtb {
 
         template<typename T>
         inline static void Destruct(T* items, size_t len) {
+            (void)items;
+            (void)len;
             // Nothing to do for POD types.
         }
 
@@ -1216,7 +1219,7 @@ namespace mtb {
 
     struct tBufferAllocator {
         tSlice<void> buf{};
-        size_t fill{};
+        ptrdiff_t fill{};
 
         tAllocator Allocator();
     };
@@ -1573,7 +1576,7 @@ namespace mtb {
         /// May not be null.
         tMapHashFunc HashFunc;
 
-        /// May be null. Fallback is memcpy-style compairson.
+        /// May be null. Fallback is memcpy-style comparison.
         tMapCompareFunc CompareFunc;
 
         /// Number of elements in the map.
@@ -1642,7 +1645,7 @@ void mtb::InternalMapPut(tMap<K, V>& map, K const& Key, V const& value) {
             Slot.State = tMapSlot::kOccupied;
             tItemOps<MTB_IS_POD(K)>::CopyConstruct(Keys + index, 1, &Key, 1);
             tItemOps<MTB_IS_POD(K)>::CopyConstruct(Values + index, 1, &value, 1);
-            ++map.len;
+            ++map.count;
             bFound = true;
             break;
         }
@@ -1669,7 +1672,7 @@ void mtb::InternalEnsureAdditionalCapacity(tMap<K, V>& map, ptrdiff_t additional
     MTB_ASSERT(map.allocator);
 
     ptrdiff_t threshold = (ptrdiff_t)(0.7f * map.cap);
-    if(map.len + additional_len < threshold) {
+    if(map.count + additional_len < threshold) {
         // We got enough space.
         return;
     }
@@ -1683,7 +1686,7 @@ void mtb::InternalEnsureAdditionalCapacity(tMap<K, V>& map, ptrdiff_t additional
     new_map.allocator = map.allocator;
     new_map.HashFunc = map.HashFunc;
     new_map.CompareFunc = map.CompareFunc;
-    new_map.len = 0;
+    new_map.count = 0;
     new_map.cap = NewCapacity;
     new_map.Slots = (tMapSlot*)new_alloc.ptr;
     new_map.Keys = (K*)(new_map.Slots + NewCapacity);
@@ -1738,7 +1741,7 @@ void mtb::Put(tMap<K, V>& map, K const& Key, V const& value) {
 template<typename K, typename V>
 V* mtb::Find(tMap<K, V>& map, K const& Key) {
     V* result = nullptr;
-    if(map.len) {
+    if(map.count) {
         ptrdiff_t start_index = (uint64_t)(map.HashFunc(&Key, sizeof(K)) % map.cap);
         ptrdiff_t index = start_index;
         while(map.Slots[index].State != tMapSlot::kFree) {
@@ -1774,7 +1777,7 @@ V& mtb::FindChecked(tMap<K, V>& map, K const& Key) {
 template<typename K, typename V>
 bool mtb::Remove(tMap<K, V>& map, K const& Key) {
     bool result = false;
-    if(map.len) {
+    if(map.count) {
         ptrdiff_t start_index = (uint64_t)(map.HashFunc(&Key, sizeof(K)) % map.cap);
         ptrdiff_t index = start_index;
         while(true) {
@@ -2617,6 +2620,7 @@ void mtb::tAllocator::FreeRaw(tSlice<void> mem, size_t alignment) const {
 #if MTB_USE_LIBC
 namespace mtb::impl {
     tSlice<void> LibcReallocProc(void* user, tSlice<void> old_mem, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) {
+        (void)user;
         MTB_ASSERT((!old_mem || old_alignment >= new_alignment) && "Changing alignment is not supported on realloc (yet?)");
 
         tSlice<void> result{};
@@ -2657,6 +2661,7 @@ namespace mtb::impl {
         size_t new_alignment,
         eInit init
     ) {
+        (void)old_alignment;
         tSlice<void> result{};
         if(old_mem || new_size) {
             MTB_ASSERT(user);
@@ -2664,11 +2669,12 @@ namespace mtb::impl {
             if(old_mem && old_mem.ptr == PtrOffset(allocator.buf.ptr, allocator.fill - old_mem.len)) {
                 // Resize is requested and old_mem is the most recent allocation.
                 void* aligned_ptr = old_mem.ptr;
-                size_t required_size = new_size;
-                AlignAllocation(&aligned_ptr, &required_size, new_alignment);
+                size_t required_usize = new_size;
+                AlignAllocation(&aligned_ptr, &required_usize, new_alignment);
+                ptrdiff_t required_size = IntCast<ptrdiff_t>(required_usize);
                 if(required_size > old_mem.len) {
                     // Grow existing allocation if possible
-                    size_t delta = required_size - old_mem.len;
+                    ptrdiff_t delta = required_size - old_mem.len;
                     if(allocator.fill + delta <= allocator.buf.len) {
                         result = PtrSlice(aligned_ptr, new_size);
                         allocator.fill += delta;
@@ -2684,8 +2690,9 @@ namespace mtb::impl {
             } else {
                 // Try to allocate a new slice.
                 void* aligned_ptr = PtrOffset(allocator.buf.ptr, allocator.fill);
-                size_t required_size = new_size;
-                AlignAllocation(&aligned_ptr, &required_size, new_alignment);
+                size_t required_usize = new_size;
+                AlignAllocation(&aligned_ptr, &required_usize, new_alignment);
+                ptrdiff_t required_size = IntCast<ptrdiff_t>(required_usize);
                 if(allocator.fill + required_size <= allocator.buf.len) {
                     result = PtrSlice(aligned_ptr, new_size);
                     allocator.fill += required_size;
