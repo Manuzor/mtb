@@ -23,6 +23,10 @@ typedef struct mstr_Allocator {
     void* (*realloc_cb)(void* user, void* old_ptr, size_t old_size, size_t new_size);
 } mstr_Allocator;
 
+#if defined(MTB__INCLUDED)
+mstr_Allocator mstr_WrapMtbAllocator(mtb::tAllocator& allocator);
+#endif
+
 typedef struct mstr_Builder {
     mstr_Allocator allocator;
     char* ptr;
@@ -47,9 +51,28 @@ void mstr_AppendFormat(mstr_Builder* b, char const* format, ...);
 void mstr_AppendFormatV(mstr_Builder* b, char const* format, va_list args);
 #endif
 
-#if defined(MTB__INCLUDED)
-mstr_Allocator mstr_WrapMtbAllocator(mtb::tAllocator& allocator);
-#endif
+typedef union mstr_Number {
+    double f64;
+    uint64_t u64;
+    int64_t i64;
+} mstr_number;
+
+typedef struct mstr_ParseOptions {
+    mstr_Number fallback_value;
+} mstr_ParseOptions;
+
+mstr_ParseOptions mstr_DefaultParseOptions();
+
+typedef struct mstr_ParseResult {
+    bool success;
+    char const* tail_ptr;
+    size_t tail_len;
+    mstr_Number value;
+} mstr_ParseResult;
+
+mstr_ParseResult mstr_ParseFloat(char const* str_ptr, size_t str_len, mstr_ParseOptions options);
+mstr_ParseResult mstr_ParseUnsignedInteger(char const* str_ptr, size_t str_len, mstr_ParseOptions options);
+mstr_ParseResult mstr_ParseSignedInteger(char const* str_ptr, size_t str_len, mstr_ParseOptions options);
 
 #if defined(__cplusplus)
 #include <new>
@@ -101,6 +124,8 @@ namespace mstr {
 #define MSTR_ASSERT(CONDITION) assert(CONDITION)
 
 static void* mstr__LibCReallocCallback(void* user, void* old_ptr, size_t old_size, size_t new_size) {
+    (void)user;
+    (void)old_size;
     void* new_ptr = realloc(old_ptr, new_size);
     MSTR_ASSERT(new_ptr);
     return new_ptr;
@@ -120,6 +145,23 @@ static mstr_Allocator mstr__GetAllocator(mstr_Builder* b) {
     }
     return result;
 }
+
+#if defined(MTB__INCLUDED)
+static void* mstr__MtbReallocCallback(void* user, void* old_ptr, size_t old_size, size_t new_size) {
+    MFS_ASSERT(user);
+    mtb::tAllocator& a = *(mtb::tAllocator*)user;
+    mtb::tSlice<void> new_mem = a.ResizeArray(mtb::PtrSlice(old_ptr, old_size), new_size, mtb::kNoInit);
+    MSTR_ASSERT(new_mem.len == new_size);
+    return new_mem.ptr;
+}
+
+mstr_Allocator mstr_WrapMtbAllocator(mtb::tAllocator& mtb_allocator) {
+    mstr_Allocator result = {};
+    result.user = &mtb_allocator;
+    result.realloc_cb = &mstr__MtbReallocCallback;
+    return result;
+}
+#endif
 
 void mstr_ShrinkAllocation(mstr_Builder* b) {
     mstr_Allocator a = mstr__GetAllocator(b);
@@ -202,22 +244,243 @@ void mstr_AppendFormatV(mstr_Builder* b, char const* format, va_list args) {
     stbsp_vsprintfcb(&mstr__StbSprintfCallback, b, buf, format, args);
 }
 
-#if defined(MTB__INCLUDED)
-static void* mstr__MtbReallocCallback(void* user, void* old_ptr, size_t old_size, size_t new_size) {
-    MFS_ASSERT(user);
-    mtb::tAllocator& a = *(mtb::tAllocator*)user;
-    mtb::tSlice<void> new_mem = a.ResizeArray(mtb::PtrSlice(old_ptr, old_size), new_size, mtb::kNoInit);
-    MSTR_ASSERT(new_mem.len == new_size);
-    return new_mem.ptr;
+// TODO: Make this public?
+static bool mstr__IsWhitespace(char c) {
+    return c == ' ';  // TODO
 }
 
-mstr_Allocator mstr_WrapMtbAllocator(mtb::tAllocator& mtb_allocator) {
-    mstr_Allocator result = {};
-    result.user = &mtb_allocator;
-    result.realloc_cb = &mstr__MtbReallocCallback;
+// TODO: Make this public?
+static bool mstr__IsDigit(char c) {
+    switch(c) {
+        case '0':  // fallthrough
+        case '1':  // fallthrough
+        case '2':  // fallthrough
+        case '3':  // fallthrough
+        case '4':  // fallthrough
+        case '5':  // fallthrough
+        case '6':  // fallthrough
+        case '7':  // fallthrough
+        case '8':  // fallthrough
+        case '9': return true;
+        default: return false;
+    }
+}
+
+static size_t mstr__TrimWhitespaceFront(char const** inout_ptr, size_t* inout_len) {
+    char const* ptr = *inout_ptr;
+    size_t len = *inout_len;
+
+    while(len && mstr__IsWhitespace(ptr[0])) {
+        ++ptr;
+        --len;
+    }
+
+    size_t num_trimmed = *inout_len - len;
+    *inout_ptr = ptr;
+    *inout_len = len;
+    return num_trimmed;
+}
+
+/// If a '+' was consumed, `1` is returned and \a SourcePtr is advanced by 1,
+/// else, if a '-' was consumed, `-1` is returned and \a SourcePtr is advanced by 1,
+/// otherwise 0 is returned and \a SourcePtr will not be modified.
+static int mstr__ConsumeSign(char const** inout_ptr, size_t* inout_len) {
+    int result{};
+    char const* ptr = *inout_ptr;
+    size_t len = *inout_len;
+
+    if(len) {
+        if(ptr[0] == '+') {
+            ++ptr;
+            --len;
+            result = 1;
+        } else if(ptr[0] == '-') {
+            ++ptr;
+            --len;
+            result = -1;
+        }
+    }
+
+    *inout_ptr = ptr;
+    *inout_len = len;
     return result;
 }
-#endif
+
+mstr_ParseOptions mstr_DefaultParseOptions() {
+    static mstr_ParseOptions mstr_no_parse_options;
+    return mstr_no_parse_options;
+}
+
+mstr_ParseResult mstr_ParseFloat(char const* str_ptr, size_t str_len, mstr_ParseOptions options) {
+    mstr_ParseResult result;
+    result.success = false;
+    result.tail_ptr = str_ptr;
+    result.tail_len = str_len;
+    result.value = options.fallback_value;
+
+    char const* ptr = str_ptr;
+    size_t len = str_len;
+
+    (void)mstr__TrimWhitespaceFront(&ptr, &len);
+    if(len) {
+        bool has_sign = mstr__ConsumeSign(&ptr, &len) < 0;
+
+        // Parse all parts of a floating point number.
+        if(len) {
+            // Numeric part
+            mstr_ParseResult numeric_result = mstr_ParseUnsignedInteger(ptr, len, mstr_DefaultParseOptions());
+            len = numeric_result.tail_len;
+            ptr = numeric_result.tail_ptr;
+            double value = (double)numeric_result.value.u64;
+
+            // Decimal part
+            bool has_decimal_part = false;
+            uint64_t decimal_value = 0;
+            uint64_t decimal_divider = 1;
+            if(len && ptr[0] == '.') {
+                ++ptr;
+                --len;
+                while(len && mstr__IsDigit(ptr[0])) {
+                    uint64_t NewDigit = (uint64_t)(ptr[0] - '0');
+                    decimal_value = (10 * decimal_value) + NewDigit;
+                    has_decimal_part = true;
+                    decimal_divider *= 10;
+                    ++ptr;
+                    --len;
+                }
+
+                value += (double)decimal_value / (double)decimal_divider;
+            }
+
+            if(numeric_result.success || has_decimal_part) {
+                // Parse exponent, if any.
+                if(len && (ptr[0] == 'e' || ptr[0] == 'E')) {
+                    size_t exponent_source_len = len - 1;
+                    char const* exponent_source_ptr = ptr + 1;
+                    bool exponent_has_sign = mstr__ConsumeSign(&exponent_source_ptr, &exponent_source_len) < 0;
+
+                    mstr_ParseOptions exponent_parse_options = mstr_DefaultParseOptions();
+                    exponent_parse_options.fallback_value.u64 = UINT64_MAX;
+                    mstr_ParseResult exponent_result = mstr_ParseUnsignedInteger(exponent_source_ptr, exponent_source_len, exponent_parse_options);
+                    if(exponent_result.success) {
+                        ptr = exponent_result.tail_ptr;
+                        len = exponent_result.tail_len;
+
+                        uint64_t exponent_part = exponent_result.value.u64;
+                        double exponent_value = 1;
+                        while(exponent_part > 0) {
+                            exponent_value *= 10;
+                            --exponent_part;
+                        }
+
+                        if(exponent_has_sign)
+                            value /= exponent_value;
+                        else
+                            value *= exponent_value;
+                    }
+                }
+
+                result.success = true;
+                result.tail_len = len;
+                result.tail_ptr = ptr;
+                result.value.f64 = has_sign ? -value : value;
+            }
+        }
+    }
+
+    return result;
+}
+
+mstr_ParseResult mstr_ParseUnsignedInteger(char const* str_ptr, size_t str_len, mstr_ParseOptions options) {
+    mstr_ParseResult result;
+    result.success = false;
+    result.tail_ptr = str_ptr;
+    result.tail_len = str_len;
+    result.value = options.fallback_value;
+
+    char const* ptr = str_ptr;
+    size_t len = str_len;
+
+    if(len) {
+        (void)mstr__TrimWhitespaceFront(&ptr, &len);
+        bool has_sign = mstr__ConsumeSign(&ptr, &len) < 0;
+        if(!has_sign) {
+            uint64_t numerical_part = 0;
+            bool has_numerical_part = false;
+
+            while(len && mstr__IsDigit(ptr[0])) {
+                numerical_part = (10 * numerical_part) + (*ptr - '0');
+                has_numerical_part = true;
+                --len;
+                ++ptr;
+            }
+
+            if(has_numerical_part) {
+                result.value.u64 = numerical_part;
+                result.success = true;
+            }
+        }
+    }
+
+    if(result.success) {
+        result.tail_ptr = ptr;
+        result.tail_len = len;
+    }
+
+    return result;
+}
+
+mstr_ParseResult mstr_ParseSignedInteger(char const* str_ptr, size_t str_len, mstr_ParseOptions options) {
+    mstr_ParseResult result;
+    result.success = false;
+    result.tail_ptr = str_ptr;
+    result.tail_len = str_len;
+    result.value = options.fallback_value;
+
+    char const* ptr = str_ptr;
+    size_t len = str_len;
+
+    if(len) {
+        (void)mstr__TrimWhitespaceFront(&ptr, &len);
+        bool has_sign = mstr__ConsumeSign(&ptr, &len) < 0;
+
+        uint64_t numerical_part = 0;
+        bool has_numerical_part = false;
+
+        while(len && mstr__IsDigit(ptr[0])) {
+            numerical_part = (10 * numerical_part) + (*ptr - '0');
+            has_numerical_part = true;
+            --len;
+            ++ptr;
+        }
+
+        if(has_numerical_part) {
+            if(has_sign) {
+                if(numerical_part <= (uint64_t)INT64_MAX + 1) {
+                    if(numerical_part == (uint64_t)INT64_MAX + 1) {
+                        result.value.i64 = INT64_MIN;
+                    } else {
+                        result.value.i64 = -(int64_t)numerical_part;
+                    }
+
+                    result.success = true;
+                }
+            } else {
+                if(numerical_part <= INT64_MAX) {
+                    result.value.i64 = numerical_part;
+                    result.success = true;
+                }
+            }
+        }
+    }
+
+    if(result.success) {
+        result.tail_ptr = ptr;
+        result.tail_len = len;
+    }
+
+    return result;
+}
 
 #if defined(__cplusplus)
 
