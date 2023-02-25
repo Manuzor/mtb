@@ -16,6 +16,9 @@
         [Section] POSIX Backend
         [Section] WIN32 Backend
         [Section] Public API Implementation
+
+    TODO:
+    * Mention that error messages are only valid until the next error is produced because an internal buffer is used internally for those messages.
 */
 
 #ifndef MFS_INCLUDED
@@ -75,7 +78,7 @@ typedef struct mfs_Error {
 */
 typedef struct mfs_String {
     char const* ptr;
-    size_t len;
+    ptrdiff_t len;
 } mfs_String;
 
 typedef enum mfs_PathType {
@@ -94,6 +97,25 @@ typedef struct mfs_CreateDirectoriesResult {
     mfs_Error error;
     bool already_exists;
 } mfs_CreateDirectoriesResult;
+
+typedef struct mfs_FileIterator {
+    mfs_Error error;
+
+    mfs_String file_path;
+    mfs_String base_name;
+
+    bool is_file;
+    bool is_dir;
+    bool is_symlink;
+
+    bool read_only_flag;
+    bool hidden_flag;
+    bool system_flag;
+
+    size_t file_size;
+
+    void* internals;
+} mfs_FileIterator;
 
 typedef struct mfs_Allocator {
     void* (*realloc_cb)(void* user_data, void* old_ptr, size_t old_size, size_t new_size);
@@ -116,7 +138,7 @@ typedef struct mfs_SetupDesc {
 /*
     Initialize mfs internal state.
 */
-MFS_FN void mfs_Setup(mfs_SetupDesc* setup);
+MFS_FN void mfs_Setup(mfs_SetupDesc const* setup_desc);
 
 /*
     Reset the internal mfs state. This frees all allocated memory, etc.
@@ -238,6 +260,22 @@ MFS_FN mfs_EntireFile mfs_ReadEntireFileZ(char const* path_utf8);
 MFS_FN mfs_CreateDirectoriesResult mfs_CreateDirectories(mfs_String path_utf8);
 MFS_FN mfs_CreateDirectoriesResult mfs_CreateDirectoriesZ(char const* path_utf8);
 
+/*
+    Iterate files under the given directory.
+ */
+MFS_FN mfs_FileIterator mfs_OpenFileIterator(mfs_String path_utf8);
+MFS_FN mfs_FileIterator mfs_OpenFileIteratorZ(char const* path_utf8);
+
+/*
+    Close the given file iterator.
+ */
+void mfs_CloseFileIterator(mfs_FileIterator* iter);
+
+/*
+    Advance the given file iterator. May not be NULL.
+ */
+MFS_FN bool mfs_AdvanceFileIterator(mfs_FileIterator* iter);
+
 #endif /* MFS_INCLUDED */
 
 /*
@@ -253,6 +291,7 @@ MFS_FN mfs_CreateDirectoriesResult mfs_CreateDirectoriesZ(char const* path_utf8)
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>  // snprintf
 
 /*
     [Section] Backend configuration
@@ -306,12 +345,18 @@ MFS_FN mfs_CreateDirectoriesResult mfs_CreateDirectoriesZ(char const* path_utf8)
 #endif
 
 #if !defined(MFS_MAKE_ERROR)
-#define MFS_MAKE_ERROR(ERROR_CODE, ERROR_MESSAGE) mfs__MakeError((ERROR_CODE), (ERROR_MESSAGE))
+#define MFS_MAKE_ERROR mfs__MakeError
 
-static mfs_Error mfs__MakeError(mfs_ErrorCode ec, char const* message) {
+static char mfs__error_buf[2 * 1024];
+
+static mfs_Error mfs__MakeError(mfs_ErrorCode ec, char const* format, ...) {
     mfs_Error result;
     result.code = ec;
-    result.message = message;
+    va_list args;
+    va_start(args, format);
+    (void)vsnprintf(mfs__error_buf, sizeof(mfs__error_buf), format, args);
+    va_end(args);
+    result.message = mfs__error_buf;
     return result;
 }
 #endif  // MFS_MAKE_ERROR
@@ -321,32 +366,31 @@ static mfs_Error mfs_NoError() {
     return result;
 }
 
-struct mfs_Allocation {
-    uint8_t* ptr;
-    size_t allocation_size;
-    size_t fill;
-    mfs_Allocation* next;
-};
+static const mfs_Allocator mfs__no_allocator;
 
-#define MFS__FILE_NAME_LIMIT 4096
-
-struct mfs__State {
-    bool ready;
-    mfs_SetupDesc desc;
-    mfs_PathType path_type;
-
-    mfs_Allocator allocator;
-    mfs_Allocation* current_allocation;
-
-    uint8_t buf[16 * 1024];
-};
-
-static mfs__State mfs__state;
-
-static void* mfs__DefaultReallocProc(void* user_data, void* old_ptr, size_t old_size, size_t new_size) {
+static void* mfs__LibcReallocProc(void* user_data, void* old_ptr, size_t old_size, size_t new_size) {
     (void)user_data;
     (void)old_size;
     return realloc(old_ptr, new_size);
+}
+
+typedef struct mfs__Arena {
+    uint8_t* ptr;
+    size_t cap;
+    size_t fill;
+    mfs__Arena* prev;
+} mfs__Arena;
+
+static const size_t arena_header_size = sizeof(mfs__Arena);
+
+static mfs__Arena* mfs__EmbedArena(void* ptr, size_t size, size_t fill) {
+    MFS_ASSERT(size >= arena_header_size);
+    mfs__Arena* arena = (mfs__Arena*)ptr;
+    arena->ptr = (uint8_t*)ptr + arena_header_size;
+    arena->cap = size - arena_header_size;
+    arena->fill = fill;
+    arena->prev = NULL;
+    return arena;
 }
 
 struct mfs__ReallocResult {
@@ -354,23 +398,16 @@ struct mfs__ReallocResult {
     void* new_ptr;
 };
 
-static mfs__ReallocResult mfs__Realloc(void* old_ptr, size_t old_size, size_t new_size) {
-    MFS_ASSERT(mfs__state.ready);
-
+static mfs__ReallocResult mfs__ArenaRealloc(mfs__Arena** arena_chain, mfs_Allocator allocator, void* old_ptr, size_t old_size, size_t new_size) {
     mfs__ReallocResult result = MFS_ZERO_INIT();
 
-    uint8_t* cur_ptr;
-    size_t cur_len;
-    size_t cur_cap;
-    if(mfs__state.current_allocation) {
-        cur_ptr = mfs__state.current_allocation->ptr;
-        cur_len = mfs__state.current_allocation->fill;
-        cur_cap = mfs__state.current_allocation->allocation_size - mfs__state.current_allocation->fill;
-    }else {
-        cur_ptr = NULL;
-        cur_len = 0;
-        cur_cap = 0;
+    MFS_ASSERT(arena_chain);
+    if(!arena_chain) {
+        result.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "Bad realloc: arena_chain argument is NULL.");
+        return result;
     }
+
+    mfs__Arena* arena = *arena_chain;
 
     MFS_ASSERT(old_ptr || new_size);
     if(!(old_ptr || new_size)) {
@@ -385,24 +422,29 @@ static mfs__ReallocResult mfs__Realloc(void* old_ptr, size_t old_size, size_t ne
             return result;
         }
 
-        MFS_ASSERT(mfs__state.current_allocation);
-        if(!mfs__state.current_allocation) {
+        MFS_ASSERT(arena);
+        if(!arena) {
             result.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "Bad realloc: old_ptr is non-NULL but no current allocation exists.");
             return result;
         }
 
         if(old_size < new_size) {
             size_t delta = new_size - old_size;
-            if(old_ptr == cur_ptr + cur_len - old_size && cur_len + delta <= cur_cap) {
+            if(old_ptr == arena->ptr + arena->fill - old_size && arena->fill + delta <= arena->cap - arena->fill) {
                 /* Resize previous allocation */
-                cur_len += delta;
+                arena->fill += delta;
                 result.new_ptr = old_ptr;
                 return result;
             }
         } else if(old_size > new_size) {
             size_t delta = new_size - old_size;
+            if(old_ptr == arena->ptr + arena->fill - old_size) {
+                arena->fill -= delta;
+            }
+            result.new_ptr = old_ptr;
+            return result;
         } else {
-            /* Unchanged size requirements. Weird. */
+            /* Unchanged size requirements. Weird but okay. */
             result.new_ptr = old_ptr;
             return result;
         }
@@ -414,51 +456,99 @@ static mfs__ReallocResult mfs__Realloc(void* old_ptr, size_t old_size, size_t ne
         }
     }
 
-    if(cur_len + new_size <= cur_cap) {
+    if(arena && arena->fill + new_size <= arena->cap) {
         /*
             Try sub-allocating from the current allocation
         */
-        result.new_ptr = cur_ptr + cur_len;
-        cur_len += new_size;
+        result.new_ptr = arena->ptr + arena->fill;
+        arena->fill += new_size;
     } else {
         /*
             Create a new allocation.
         */
-        size_t allocation_size = sizeof(mfs_Allocation) + new_size;
-        if(allocation_size < 4096) {
-            allocation_size = 4096;
+        size_t new_allocation_size = arena_header_size + new_size;
+        if(new_allocation_size < 4096) {
+            new_allocation_size = 4096;
         }
-        mfs_Allocation* new_a = (mfs_Allocation*)mfs__state.allocator.realloc_cb(mfs__state.allocator.user_data, mfs__state.current_allocation, cur_cap, allocation_size);
-        if(!new_a) {
-            result.error = MFS_MAKE_ERROR(mfs_ErrorCode_OutOfMemory, "Out of memory: realloc_cb returned NULL.");
+        if(!allocator.realloc_cb) {
+            result.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "Bad realloc: realloc_cb is NULL.");
+            return result;
+        }
+        mfs__Arena* new_arena = (mfs__Arena*)allocator.realloc_cb(allocator.user_data, NULL, 0, new_allocation_size);
+        if(!new_arena) {
+            result.error = MFS_MAKE_ERROR(mfs_ErrorCode_OutOfMemory, "Bad realloc: realloc_cb returned NULL - Out of memory.");
             return result;
         }
 
-        new_a->ptr = (uint8_t*)(new_a + 1);
-        new_a->allocation_size = allocation_size;
-        new_a->fill = new_size;
-        new_a->next = mfs__state.current_allocation;
+        new_arena->ptr = (uint8_t*)new_arena + arena_header_size;
+        MFS_ASSERT(new_arena->ptr == (uint8_t*)(new_arena + 1));
+        new_arena->cap = new_allocation_size - arena_header_size;
+        new_arena->fill = new_size;
+        new_arena->prev = arena;
 
-        result.new_ptr = new_a->ptr;
-        mfs__state.current_allocation = new_a;
+        result.new_ptr = new_arena->ptr;
+        *arena_chain = new_arena;
     }
 
     if(old_ptr) {
+        MFS_ASSERT(old_size);
         memcpy(result.new_ptr, old_ptr, old_size);
     }
 
     return result;
 }
 
+static void mfs__FreeArenaChain(mfs__Arena* arena, mfs_Allocator allocator) {
+    MFS_ASSERT(allocator.realloc_cb);
+    if(!allocator.realloc_cb) {
+        return;
+    }
+    while(arena) {
+        mfs__Arena* to_free = arena;
+        arena = arena->prev;
+        void* free_result = allocator.realloc_cb(allocator.user_data, to_free, arena_header_size + to_free->cap, 0);
+        MFS_ASSERT(free_result == NULL);
+    }
+}
+
+// TODO: Is there a *good* reason to have this limit?
+#define MFS__FILE_NAME_LIMIT 4096
+
+typedef struct mfs__State {
+    bool ready;
+    mfs_SetupDesc desc;
+    mfs_PathType path_type;
+
+    mfs_Allocator allocator;
+    mfs__Arena* arena;
+
+    uint8_t buf[14 * 1024];
+} mfs__State;
+
+static mfs__State mfs__state;
+
+static mfs__ReallocResult mfs__GlobalRealloc(void* old_ptr, size_t old_size, size_t new_size) {
+    MFS_ASSERT(mfs__state.ready);
+    if(!mfs__state.ready) {
+        mfs__ReallocResult result = MFS_ZERO_INIT();
+        result.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "Not initialized. Did you forget to call mfs_Setup?");
+        return result;
+    }
+    return mfs__ArenaRealloc(&mfs__state.arena, mfs__state.allocator, old_ptr, old_size, new_size);
+}
+
 static bool mfs__IsDirSeparator(char c) {
     switch(mfs__state.path_type) {
         case mfs_PathType_Windows: return c == '\\' || c == '/';
         case mfs_PathType_Posix: return c == '/';
-        default: MFS_FATAL(); return false;
+        case mfs_PathType_Auto:
+        default:
+            MFS_FATAL();
+            return false;
     }
 }
 
-static size_t mfs__TrimTrailingDirSeparators(char const* ptr, size_t len) {
+static ptrdiff_t mfs__TrimTrailingDirSeparators(char const* ptr, ptrdiff_t len) {
     while(len > 0) {
         if(!mfs__IsDirSeparator(ptr[len - 1])) {
             break;
@@ -476,7 +566,7 @@ static size_t mfs__TrimTrailingDirSeparators(char const* ptr, size_t len) {
 #include <stdlib.h>
 #include <stdio.h>
 
-mfs_EntireFile mfs__posix_ReadEntireFile(mfs_String path_utf8) {
+static mfs_EntireFile mfs__posix_ReadEntireFile(mfs_String path_utf8) {
     mfs_EntireFile result = MFS_ZERO_INIT();
 
     if(!path_utf8.len) {
@@ -512,7 +602,7 @@ mfs_EntireFile mfs__posix_ReadEntireFile(mfs_String path_utf8) {
         return result;
     }
 
-    mfs__ReallocResult alloc_result = mfs__Realloc(NULL, 0, file_size);
+    mfs__ReallocResult alloc_result = mfs__GlobalRealloc(NULL, 0, file_size);
     if(alloc_result.error.code) {
         result.error = alloc_result.error;
         return result;
@@ -535,13 +625,19 @@ mfs_EntireFile mfs__posix_ReadEntireFile(mfs_String path_utf8) {
     return result;
 }
 
-mfs_CreateDirectoriesResult mfs__posix_CreateDirectories(mfs_String path_utf8) {
+static mfs_CreateDirectoriesResult mfs__posix_CreateDirectories(mfs_String path_utf8) {
     mfs_CreateDirectoriesResult result = MFS_ZERO_INIT();
     result.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "NOT IMPLEMENTED");
     return result;
 }
 
-#endif // MFS__POSIX
+static mfs_FileIterator mfs__posix_OpenFileIterator(mfs_String path_utf8) {
+    mfs_FileIterator result = MFS_ZERO_INIT();
+    result.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "NOT IMPLEMENTED");
+    return result;
+}
+
+#endif  // MFS__POSIX
 
 /*
     [Section] WIN32 Backend
@@ -551,11 +647,96 @@ mfs_CreateDirectoriesResult mfs__posix_CreateDirectories(mfs_String path_utf8) {
 
 #include <Windows.h>
 
-/*
-    TODO: Convert input UTF-8 string to Windows' wide string, create file, read everything.
-*/
+typedef struct mfs__win32_WideStringResult {
+    mfs_Error error;
+    wchar_t* ptr;
+    size_t allocation_size;
+    ptrdiff_t len;  // Number of characters.
+} mfs__win32_WideStringResult;
 
-mfs_EntireFile mfs__win32_ReadEntireFile(mfs_String path_utf8) {
+static mfs__win32_WideStringResult mfs__win32_ConvertToWideString(mfs__Arena** arena, mfs_Allocator allocator, char const* str_ptr, ptrdiff_t str_len) {
+    mfs__win32_WideStringResult result = MFS_ZERO_INIT();
+
+    result.len = (ptrdiff_t)MultiByteToWideChar(
+        CP_UTF8,       // UINT                              CodePage,
+        0,             // DWORD                             dwFlags,
+        str_ptr,       // _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr,
+        (int)str_len,  // int                               cbMultiByte,
+        NULL,          // LPWSTR                            lpWideCharStr,
+        0              // int                               cchWideChar
+    );
+
+    result.allocation_size = (result.len + 1) * sizeof(wchar_t);
+    mfs__ReallocResult alloc_result = mfs__ArenaRealloc(arena, allocator, NULL, 0, result.allocation_size);
+    if(alloc_result.error.code) {
+        result.error = alloc_result.error;
+        return result;
+    }
+
+    result.ptr = (wchar_t*)alloc_result.new_ptr;
+
+    (void)MultiByteToWideChar(
+        CP_UTF8,         // UINT                              CodePage,
+        0,               // DWORD                             dwFlags,
+        str_ptr,         // _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr,
+        (int)str_len,    // int                               cbMultiByte,
+        result.ptr,      // LPWSTR                            lpWideCharStr,
+        (int)result.len  // int                               cchWideChar
+    );
+    result.ptr[result.len] = 0;
+
+    return result;
+}
+
+typedef struct mfs__win32_Utf8Result {
+    mfs_Error error;
+    char* ptr;
+    size_t allocation_size;
+    ptrdiff_t len;  // Number of characters.
+} mfs__win32_Utf8Result;
+
+static mfs__win32_Utf8Result mfs__win32_ConvertToUtf8(mfs__Arena** arena, mfs_Allocator allocator, wchar_t* str_ptr, ptrdiff_t str_len) {
+    mfs__win32_Utf8Result result = MFS_ZERO_INIT();
+
+    result.len = (ptrdiff_t)WideCharToMultiByte(
+        CP_UTF8,       // [in]            UINT                               CodePage,
+        0,             // [in]            DWORD                              dwFlags,
+        str_ptr,       // [in]            _In_NLS_string_(cchWideChar)LPCWCH lpWideCharStr,
+        (int)str_len,  // [in]            int                                cchWideChar,
+        NULL,          // [out, optional] LPSTR                              lpMultiByteStr,
+        0,             // [in]            int                                cbMultiByte,
+        NULL,          // [in, optional]  LPCCH                              lpDefaultChar,
+        NULL           // [out, optional] LPBOOL                             lpUsedDefaultChar
+    );
+
+    result.allocation_size = result.len + 1;
+    mfs__ReallocResult alloc_result = mfs__ArenaRealloc(arena, allocator, NULL, 0, result.allocation_size);
+    if(alloc_result.error.code) {
+        result.error = alloc_result.error;
+        return result;
+    }
+
+    result.ptr = (char*)alloc_result.new_ptr;
+
+    (void)WideCharToMultiByte(
+        CP_UTF8,          // [in]            UINT                               CodePage,
+        0,                // [in]            DWORD                              dwFlags,
+        str_ptr,          // [in]            _In_NLS_string_(cchWideChar)LPCWCH lpWideCharStr,
+        (int)str_len,     // [in]            int                                cchWideChar,
+        result.ptr,       // [out, optional] LPSTR                              lpMultiByteStr,
+        (int)result.len,  // [in]            int                                cbMultiByte,
+        NULL,             // [in, optional]  LPCCH                              lpDefaultChar,
+        NULL              // [out, optional] LPBOOL                             lpUsedDefaultChar
+    );
+    result.ptr[result.len] = 0;
+
+    return result;
+}
+
+static mfs__win32_WideStringResult mfs__win32_ResolvePath(mfs__Arena** arena, mfs_Allocator allocator, mfs_String path_utf8) {
+}
+
+static mfs_EntireFile mfs__win32_ReadEntireFile(mfs_String path_utf8) {
     mfs_EntireFile result = MFS_ZERO_INIT();
 
     if(!mfs__state.ready) {
@@ -563,21 +744,11 @@ mfs_EntireFile mfs__win32_ReadEntireFile(mfs_String path_utf8) {
         return result;
     }
 
-    wchar_t* wname_ptr = (wchar_t*)&mfs__state.buf[0];
-    size_t wbuf_cap = sizeof(mfs__state.buf) / sizeof(wchar_t);
-
-    int wname_len = MultiByteToWideChar(
-        CP_UTF8,                  // UINT                              CodePage,
-        0,                        // DWORD                             dwFlags,
-        path_utf8.ptr,       // _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr,
-        (int)path_utf8.len,  // int                               cbMultiByte,
-        wname_ptr,                // LPWSTR                            lpWideCharStr,
-        (int)wbuf_cap - 1         // int                               cchWideChar
-    );
-    wname_ptr[wname_len] = 0;
+    mfs__Arena* temp_arena = mfs__EmbedArena(mfs__state.buf, sizeof(mfs__state.buf), 0);
+    mfs__win32_WideStringResult path_win32 = mfs__win32_ConvertToWideString(&temp_arena, mfs__no_allocator, path_utf8.ptr, path_utf8.len);
 
     HANDLE file = CreateFileW(
-        wname_ptr,        // [in]           LPCWSTR               lpFileName,
+        path_win32.ptr,   // [in]           LPCWSTR               lpFileName,
         GENERIC_READ,     // [in]           DWORD                 dwDesiredAccess,
         FILE_SHARE_READ,  // [in]           DWORD                 dwShareMode,
         NULL,             // [in, optional] LPSECURITY_ATTRIBUTES lpSecurityAttributes,
@@ -597,15 +768,18 @@ mfs_EntireFile mfs__win32_ReadEntireFile(mfs_String path_utf8) {
         return result;
     }
 
+    uint8_t* ptr = nullptr;
     size_t size = file_size.QuadPart;
-    mfs__ReallocResult alloc_result = mfs__Realloc(NULL, 0, size);
-    if(alloc_result.error.code) {
-        result.error = alloc_result.error;
-        CloseHandle(file);
-        return result;
+    if(size) {
+        mfs__ReallocResult alloc_result = mfs__GlobalRealloc(NULL, 0, size);
+        if(alloc_result.error.code) {
+            result.error = alloc_result.error;
+            CloseHandle(file);
+            return result;
+        }
+        ptr = (uint8_t*)(uintptr_t)alloc_result.new_ptr;
     }
 
-    uint8_t* ptr = (uint8_t*)(uintptr_t)alloc_result.new_ptr;
     size_t remain = size;
     while(remain > 0) {
         DWORD part = remain > UINT32_MAX ? (DWORD)UINT32_MAX : (DWORD)remain;
@@ -631,11 +805,11 @@ mfs_EntireFile mfs__win32_ReadEntireFile(mfs_String path_utf8) {
     return result;
 }
 
-mfs_CreateDirectoriesResult mfs__win32_CreateDirectories(mfs_String path_utf8) {
+static mfs_CreateDirectoriesResult mfs__win32_CreateDirectories(mfs_String path_utf8) {
     mfs_CreateDirectoriesResult result = MFS_ZERO_INIT();
 
     char const* name_ptr = path_utf8.ptr;
-    size_t name_len = mfs__TrimTrailingDirSeparators(path_utf8.ptr, path_utf8.len);
+    ptrdiff_t name_len = mfs__TrimTrailingDirSeparators(path_utf8.ptr, path_utf8.len);
     if(!name_len) {
         // Assume an essentially empty path is already created.
         result.error = mfs_NoError();
@@ -657,7 +831,7 @@ mfs_CreateDirectoriesResult mfs__win32_CreateDirectories(mfs_String path_utf8) {
 
     result.already_exists = true;
 
-    size_t end = 0;
+    ptrdiff_t end = 0;
     while(end < name_len) {
         while(end < name_len) {
             if(mfs__IsDirSeparator(name_ptr[end])) {
@@ -666,20 +840,10 @@ mfs_CreateDirectoriesResult mfs__win32_CreateDirectories(mfs_String path_utf8) {
             ++end;
         }
 
-        wchar_t* wname_ptr = (wchar_t*)&mfs__state.buf[0];
-        size_t wbuf_cap = sizeof(mfs__state.buf) / sizeof(wchar_t);
+        mfs__Arena* temp_arena = mfs__EmbedArena(mfs__state.buf, sizeof(mfs__state.buf), 0);
+        mfs__win32_WideStringResult path_win32 = mfs__win32_ConvertToWideString(&temp_arena, mfs__no_allocator, path_utf8.ptr, path_utf8.len);
 
-        int wname_len = MultiByteToWideChar(
-            CP_UTF8,           // UINT                              CodePage,
-            0,                 // DWORD                             dwFlags,
-            name_ptr,          // _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr,
-            (int)end,          // int                               cbMultiByte,
-            wname_ptr,         // LPWSTR                            lpWideCharStr,
-            (int)wbuf_cap - 1  // int                               cchWideChar
-        );
-        wname_ptr[wname_len] = 0;
-
-        bool ok = CreateDirectoryW(wname_ptr, NULL) != 0;
+        bool ok = CreateDirectoryW(path_win32.ptr, NULL) != 0;
         if(ok) {
             result.already_exists = false;
         }
@@ -705,14 +869,196 @@ mfs_CreateDirectoriesResult mfs__win32_CreateDirectories(mfs_String path_utf8) {
     return result;
 }
 
-#endif /* MFS__WIN32 */
+typedef struct mfs__win32_FileIterator {
+    HANDLE win32_handle;
+    WIN32_FIND_DATAW win32_data;
+    uint8_t buf[12 * 1024];
+    ptrdiff_t arena_fill;
+    char* dir_ptr;
+    size_t dir_len;
+} mfs__win32_FileIterator;
 
+static mfs_FileIterator mfs__win32_OpenFileIterator(mfs_String dir_utf8) {
+    mfs_FileIterator iter = MFS_ZERO_INIT();
+
+    if(!mfs__state.ready) {
+        iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "Not initialized. Did you forget to call mfs_Setup?");
+        return iter;
+    }
+
+    mfs__Arena* temp_arena = mfs__EmbedArena(mfs__state.buf, sizeof(mfs__state.buf), 0);
+
+    mfs__ReallocResult internals_alloc_result = mfs__GlobalRealloc(NULL, 0, sizeof(mfs__win32_FileIterator));
+    if(internals_alloc_result.error.code) {
+        iter.error = internals_alloc_result.error;
+        return iter;
+    }
+    mfs__win32_FileIterator* win32_iter = (mfs__win32_FileIterator*)internals_alloc_result.new_ptr;
+
+    /*
+        We convert the input path from UTF-8 to a wchar_t equivalent that
+        windows expects, be also append "\*" to the string because that's the
+        syntax `FindFirstFile` expects. Since we're not interested in the
+        trailing "\*" part, we strip it off again after we called
+        `FindFirstFile`.
+     */
+    mfs__Arena* iter_arena = mfs__EmbedArena(win32_iter->buf, sizeof(win32_iter->buf), 0);
+    mfs__ReallocResult path_copy_dest_result = mfs__ArenaRealloc(&iter_arena, mfs__no_allocator, NULL, 0, dir_utf8.len + 1);
+    if(path_copy_dest_result.error.code) {
+        iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidFileName, "Input path is too long");
+        return iter;
+    }
+
+    win32_iter->dir_len = dir_utf8.len;
+    win32_iter->dir_ptr = (char*)path_copy_dest_result.new_ptr;
+    memcpy(win32_iter->dir_ptr, dir_utf8.ptr, win32_iter->dir_len);
+    win32_iter->dir_ptr[win32_iter->dir_len] = 0;
+
+    mfs__win32_WideStringResult search_path = mfs__win32_ConvertToWideString(&temp_arena, mfs__no_allocator, dir_utf8.ptr, dir_utf8.len);
+    if(search_path.error.code) {
+        iter.error = search_path.error;
+        mfs__GlobalRealloc(iter.internals, sizeof(mfs__win32_FileIterator), 0);
+        return iter;
+    }
+
+    // Make room for 2 more characters "\*".
+    size_t prev_size = search_path.allocation_size;
+    search_path.allocation_size = search_path.allocation_size + 2 * sizeof(wchar_t);
+    mfs__ReallocResult extended = mfs__ArenaRealloc(&temp_arena, mfs__no_allocator, search_path.ptr, prev_size, search_path.allocation_size);
+    if(extended.error.code) {
+        iter.error = extended.error;
+        mfs__GlobalRealloc(iter.internals, sizeof(mfs__win32_FileIterator), 0);
+        return iter;
+    }
+    search_path.ptr = (wchar_t*)extended.new_ptr;
+
+    // Append "\*"
+    search_path.ptr[search_path.len] = '\\';
+    search_path.ptr[search_path.len + 1] = '*';
+    search_path.ptr[search_path.len + 2] = 0;
+
+    win32_iter->win32_handle = FindFirstFileW(search_path.ptr, &win32_iter->win32_data);
+    if(win32_iter->win32_handle == INVALID_HANDLE_VALUE) {
+        if(GetLastError() == ERROR_FILE_NOT_FOUND) {
+            iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_NotFound, "Unable to find file '%.*s'", (int)dir_utf8.len, dir_utf8.ptr);
+        } else {
+            iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_Unkown, "FindFirstFileW failed");  // TODO: Get windows error message as string and embed using a temp buffer?
+        }
+        mfs__GlobalRealloc(iter.internals, sizeof(mfs__win32_FileIterator), 0);
+        return iter;
+    }
+
+    win32_iter->arena_fill = iter_arena->fill;
+    iter.internals = win32_iter;
+    return iter;
+}
+
+static void mfs__win32_CloseFileIterator(mfs_FileIterator* iter) {
+    if(!iter) {
+        return;
+    }
+
+    if(iter->internals) {
+        mfs__win32_FileIterator* win32_iter = (mfs__win32_FileIterator*)iter->internals;
+        if(win32_iter->win32_handle != INVALID_HANDLE_VALUE) {
+            (void)FindClose(win32_iter->win32_handle);
+        }
+
+        mfs__GlobalRealloc(iter->internals, sizeof(mfs__win32_FileIterator), 0);
+        iter->internals = NULL;
+    }
+}
+
+static bool mfs__win32_AdvanceFileIterator(mfs_FileIterator* iter) {
+    MFS_ASSERT(iter);
+    if(!iter) {
+        return false;
+    }
+
+    iter->error = MFS_ZERO_INIT();
+
+    if(!iter->internals) {
+        return false;
+    }
+
+    mfs__win32_FileIterator* win32_iter = (mfs__win32_FileIterator*)iter->internals;
+    MFS_ASSERT(win32_iter->win32_handle != INVALID_HANDLE_VALUE);
+    if(win32_iter->win32_handle == INVALID_HANDLE_VALUE) {
+        iter->error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "Invalid internal iterator state. (BUG)");
+        mfs__win32_CloseFileIterator(iter);
+        return false;
+    }
+
+    bool skip = true;
+    while(skip) {
+        skip = false;
+
+        // Skip '.'
+        if(win32_iter->win32_data.cFileName[0] == '.' && win32_iter->win32_data.cFileName[1] == 0) {
+            skip = true;
+        }
+
+        // Skip '..'
+        if(win32_iter->win32_data.cFileName[0] == '.' && win32_iter->win32_data.cFileName[1] == '.' && win32_iter->win32_data.cFileName[2] == 0) {
+            skip = true;
+        }
+
+        if(skip) {
+            if(!FindNextFileW(win32_iter->win32_handle, &win32_iter->win32_data)) {
+                mfs__win32_CloseFileIterator(iter);
+                return false;
+            }
+        }
+    }
+
+    mfs__Arena* arena = mfs__EmbedArena(win32_iter->buf, sizeof(win32_iter->buf), win32_iter->arena_fill);
+    mfs__ReallocResult dir_copy_result = mfs__ArenaRealloc(&arena, mfs__no_allocator, NULL, 0, win32_iter->dir_len + 1);
+    if(dir_copy_result.error.code) {
+        iter->error = MFS_MAKE_ERROR(mfs_ErrorCode_OutOfMemory, "Internal arena exhausted.");
+        return false;
+    }
+
+    char* full_path = (char*)dir_copy_result.new_ptr;
+    memmove(full_path, win32_iter->dir_ptr, win32_iter->dir_len);
+    full_path[win32_iter->dir_len] = '\\';
+
+    mfs__win32_Utf8Result file_name = mfs__win32_ConvertToUtf8(&arena, mfs__no_allocator, win32_iter->win32_data.cFileName, -1);
+    if(file_name.error.code) {
+        iter->error = file_name.error;
+        return false;
+    }
+
+    iter->file_path.ptr = full_path;
+    iter->file_path.len = win32_iter->dir_len + 1 + file_name.len;
+
+    iter->base_name.ptr = file_name.ptr;
+    iter->base_name.len = file_name.len;
+
+    iter->is_dir = (win32_iter->win32_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    iter->is_file = (win32_iter->win32_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    iter->is_symlink = (win32_iter->win32_data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+
+    iter->read_only_flag = (win32_iter->win32_data.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0;
+    iter->hidden_flag = (win32_iter->win32_data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0;
+    iter->system_flag = (win32_iter->win32_data.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) != 0;
+
+    iter->file_size = (size_t)win32_iter->win32_data.nFileSizeHigh * ((size_t)MAXDWORD + 1) + (size_t)win32_iter->win32_data.nFileSizeLow;
+
+    // Advance to the next file.
+    if(!FindNextFileW(win32_iter->win32_handle, &win32_iter->win32_data)) {
+        // There are no more files left so close up shop and free allocated memory.
+        mfs__win32_CloseFileIterator(iter);
+    }
+    return true;
+}
+
+#endif /* MFS__WIN32 */
 
 /*
     [Section] Public API Implementation
 */
 
-void mfs_Setup(mfs_SetupDesc* setup_desc) {
+void mfs_Setup(mfs_SetupDesc const* setup_desc) {
     MFS_ASSERT(!mfs__state.ready);
     MFS_ASSERT(setup_desc);
     mfs__state.desc = *setup_desc;
@@ -728,7 +1074,7 @@ void mfs_Setup(mfs_SetupDesc* setup_desc) {
     if(setup_desc->allocator.realloc_cb) {
         mfs__state.allocator = setup_desc->allocator;
     } else {
-        mfs__state.allocator.realloc_cb = &mfs__DefaultReallocProc;
+        mfs__state.allocator.realloc_cb = &mfs__LibcReallocProc;
         mfs__state.allocator.user_data = NULL;
     }
     mfs__state.ready = true;
@@ -739,14 +1085,10 @@ void mfs_Reset(void) {
         return;
     }
 
-    mfs_Allocation* a = mfs__state.current_allocation;
-    while(a) {
-        mfs_Allocation* to_free = a;
-        a = a->next;
-        void* free_result = mfs__state.allocator.realloc_cb(mfs__state.allocator.user_data, to_free, to_free->allocation_size, 0);
-        MFS_ASSERT(free_result == NULL);
+    if(mfs__state.arena) {
+        mfs__FreeArenaChain(mfs__state.arena, mfs__state.allocator);
+        mfs__state.arena = NULL;
     }
-    mfs__state.current_allocation = NULL;
 }
 
 char const* mfs_ErrorCodeToString(mfs_ErrorCode error_code) {
@@ -758,7 +1100,9 @@ char const* mfs_ErrorCodeToString(mfs_ErrorCode error_code) {
         case mfs_ErrorCode_NotFound: return "NotFound";
         case mfs_ErrorCode_PermissionDenied: return "PermissionDenied";
         case mfs_ErrorCode_InvalidFileName: return "InvalidFileName";
-        default: MFS_FATAL(); return "";
+        default:
+            MFS_FATAL();
+            return "";
     }
 }
 
@@ -815,7 +1159,7 @@ MFS_FN mfs_String mfs_AnchorZ(char const* path_cstr) {
 }
 
 MFS_FN mfs_String mfs_DirName(mfs_String path) {
-    size_t dir_end = mfs__TrimTrailingDirSeparators(path.ptr, path.len);
+    ptrdiff_t dir_end = mfs__TrimTrailingDirSeparators(path.ptr, path.len);
     while(dir_end > 0) {
         --dir_end;
         if(mfs__IsDirSeparator(path.ptr[dir_end])) {
@@ -833,8 +1177,8 @@ MFS_FN mfs_String mfs_DirNameZ(char const* path_cstr) {
 }
 
 MFS_FN mfs_String mfs_BaseName(mfs_String path) {
-    size_t base_end = mfs__TrimTrailingDirSeparators(path.ptr, path.len);
-    size_t base_start = base_end;
+    ptrdiff_t base_end = mfs__TrimTrailingDirSeparators(path.ptr, path.len);
+    ptrdiff_t base_start = base_end;
     while(base_start > 0) {
         if(mfs__IsDirSeparator(path.ptr[base_start - 1])) {
             break;
@@ -852,13 +1196,13 @@ MFS_FN mfs_String mfs_BaseNameZ(char const* path_cstr) {
 }
 
 MFS_FN mfs_String mfs_Suffix(mfs_String path) {
-    size_t start = path.len;
+    ptrdiff_t start = path.len;
     bool dot = false;
     while(start > 0) {
         if(mfs__IsDirSeparator(path.ptr[start - 1])) {
             break;
         }
-        if(path.ptr[start -1] == '.') {
+        if(path.ptr[start - 1] == '.') {
             dot = true;
             --start;
             break;
@@ -924,5 +1268,36 @@ mfs_CreateDirectoriesResult mfs_CreateDirectoriesZ(char const* path_utf8) {
     return mfs_CreateDirectories(mfs_StringZ(path_utf8));
 }
 
+mfs_FileIterator mfs_OpenFileIterator(mfs_String path_utf8) {
+#if MFS__POSIX
+    return mfs__posix_OpenFileIterator(path_utf8);
+#elif MFS__WIN32
+    return mfs__win32_OpenFileIterator(path_utf8);
+#endif
+}
+
+mfs_FileIterator mfs_OpenFileIteratorZ(char const* path_utf8) {
+    return mfs_OpenFileIterator(mfs_StringZ(path_utf8));
+}
+
+void mfs_CloseFileIterator(mfs_FileIterator* iter) {
+#if MFS__POSIX
+    return mfs__posix_CloseFileIterator(iter);
+#elif MFS__WIN32
+    return mfs__win32_CloseFileIterator(iter);
+#endif
+}
+
+bool mfs_AdvanceFileIterator(mfs_FileIterator* iter) {
+    MFS_ASSERT(iter);
+    if(!iter) {
+        return false;
+    }
+#if MFS__POSIX
+    return mfs__posix_AdvanceFileIterator(iter);
+#elif MFS__WIN32
+    return mfs__win32_AdvanceFileIterator(iter);
+#endif
+}
 
 #endif /* MFS_IMPLEMENTATION */
