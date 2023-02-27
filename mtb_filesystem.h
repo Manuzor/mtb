@@ -291,7 +291,8 @@ MFS_FN bool mfs_AdvanceFileIterator(mfs_FileIterator* iter);
 
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>  // snprintf
+#include <stdio.h>   // snprintf
+#include <stdarg.h>  // va_list, va_start, va_end
 
 /*
     [Section] Backend configuration
@@ -657,7 +658,7 @@ typedef struct mfs__win32_WideStringResult {
 static mfs__win32_WideStringResult mfs__win32_ConvertToWideString(mfs__Arena** arena, mfs_Allocator allocator, char const* str_ptr, ptrdiff_t str_len) {
     mfs__win32_WideStringResult result = MFS_ZERO_INIT();
 
-    result.len = (ptrdiff_t)MultiByteToWideChar(
+    ptrdiff_t required_len = (ptrdiff_t)MultiByteToWideChar(
         CP_UTF8,       // UINT                              CodePage,
         0,             // DWORD                             dwFlags,
         str_ptr,       // _In_NLS_string_(cbMultiByte)LPCCH lpMultiByteStr,
@@ -665,6 +666,12 @@ static mfs__win32_WideStringResult mfs__win32_ConvertToWideString(mfs__Arena** a
         NULL,          // LPWSTR                            lpWideCharStr,
         0              // int                               cchWideChar
     );
+
+    if(str_len < 0) {
+        result.len = required_len > 0 ? required_len - 1 : 0;
+    } else {
+        result.len = required_len;
+    }
 
     result.allocation_size = (result.len + 1) * sizeof(wchar_t);
     mfs__ReallocResult alloc_result = mfs__ArenaRealloc(arena, allocator, NULL, 0, result.allocation_size);
@@ -683,8 +690,8 @@ static mfs__win32_WideStringResult mfs__win32_ConvertToWideString(mfs__Arena** a
         result.ptr,      // LPWSTR                            lpWideCharStr,
         (int)result.len  // int                               cchWideChar
     );
-    result.ptr[result.len] = 0;
 
+    result.ptr[result.len] = 0;
     return result;
 }
 
@@ -698,7 +705,7 @@ typedef struct mfs__win32_Utf8Result {
 static mfs__win32_Utf8Result mfs__win32_ConvertToUtf8(mfs__Arena** arena, mfs_Allocator allocator, wchar_t* str_ptr, ptrdiff_t str_len) {
     mfs__win32_Utf8Result result = MFS_ZERO_INIT();
 
-    result.len = (ptrdiff_t)WideCharToMultiByte(
+    ptrdiff_t required_len = (ptrdiff_t)WideCharToMultiByte(
         CP_UTF8,       // [in]            UINT                               CodePage,
         0,             // [in]            DWORD                              dwFlags,
         str_ptr,       // [in]            _In_NLS_string_(cchWideChar)LPCWCH lpWideCharStr,
@@ -708,6 +715,13 @@ static mfs__win32_Utf8Result mfs__win32_ConvertToUtf8(mfs__Arena** arena, mfs_Al
         NULL,          // [in, optional]  LPCCH                              lpDefaultChar,
         NULL           // [out, optional] LPBOOL                             lpUsedDefaultChar
     );
+
+    // NOTE: When we pass -1 as the input length, the returned length includes the trailing null-char.
+    if(str_len < 0) {
+        result.len = required_len > 0 ? required_len - 1 : 0;
+    } else {
+        result.len = required_len;
+    }
 
     result.allocation_size = result.len + 1;
     mfs__ReallocResult alloc_result = mfs__ArenaRealloc(arena, allocator, NULL, 0, result.allocation_size);
@@ -728,8 +742,8 @@ static mfs__win32_Utf8Result mfs__win32_ConvertToUtf8(mfs__Arena** arena, mfs_Al
         NULL,             // [in, optional]  LPCCH                              lpDefaultChar,
         NULL              // [out, optional] LPBOOL                             lpUsedDefaultChar
     );
-    result.ptr[result.len] = 0;
 
+    result.ptr[result.len] = 0;
     return result;
 }
 
@@ -880,6 +894,7 @@ typedef struct mfs__win32_FileIterator {
 
 static mfs_FileIterator mfs__win32_OpenFileIterator(mfs_String dir_utf8) {
     mfs_FileIterator iter = MFS_ZERO_INIT();
+    MFS_ASSERT(iter.error.code == mfs_ErrorCode_None);
 
     if(!mfs__state.ready) {
         iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "Not initialized. Did you forget to call mfs_Setup?");
@@ -917,7 +932,7 @@ static mfs_FileIterator mfs__win32_OpenFileIterator(mfs_String dir_utf8) {
     mfs__win32_WideStringResult search_path = mfs__win32_ConvertToWideString(&temp_arena, mfs__no_allocator, dir_utf8.ptr, dir_utf8.len);
     if(search_path.error.code) {
         iter.error = search_path.error;
-        mfs__GlobalRealloc(iter.internals, sizeof(mfs__win32_FileIterator), 0);
+        mfs__GlobalRealloc(win32_iter, sizeof(mfs__win32_FileIterator), 0);
         return iter;
     }
 
@@ -927,7 +942,7 @@ static mfs_FileIterator mfs__win32_OpenFileIterator(mfs_String dir_utf8) {
     mfs__ReallocResult extended = mfs__ArenaRealloc(&temp_arena, mfs__no_allocator, search_path.ptr, prev_size, search_path.allocation_size);
     if(extended.error.code) {
         iter.error = extended.error;
-        mfs__GlobalRealloc(iter.internals, sizeof(mfs__win32_FileIterator), 0);
+        mfs__GlobalRealloc(win32_iter, sizeof(mfs__win32_FileIterator), 0);
         return iter;
     }
     search_path.ptr = (wchar_t*)extended.new_ptr;
@@ -944,7 +959,7 @@ static mfs_FileIterator mfs__win32_OpenFileIterator(mfs_String dir_utf8) {
         } else {
             iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_Unkown, "FindFirstFileW failed");  // TODO: Get windows error message as string and embed using a temp buffer?
         }
-        mfs__GlobalRealloc(iter.internals, sizeof(mfs__win32_FileIterator), 0);
+        mfs__GlobalRealloc(win32_iter, sizeof(mfs__win32_FileIterator), 0);
         return iter;
     }
 
