@@ -51,6 +51,52 @@ void mstr_AppendFormat(mstr_Builder* b, char const* format, ...);
 void mstr_AppendFormatV(mstr_Builder* b, char const* format, va_list args);
 #endif
 
+#if defined(__cplusplus)
+#include <new>
+
+namespace mstr {
+    struct Builder : mstr_Builder {
+        Builder() = default;
+        Builder(Builder const&) = default;
+        ~Builder() = default;
+        Builder& operator=(Builder const&) = default;
+
+        explicit Builder(mstr_Allocator in_allocator) {
+            (void)new(this) Builder{};
+            allocator = in_allocator;
+        }
+
+        /* clang-format off */
+        Builder& ShrinkAllocation() { mstr_ShrinkAllocation(this); return *this; }
+        Builder& Clear() { mstr_Clear(this); return *this; }
+        Builder& ClearAllocation() { mstr_ClearAllocation(this); return *this; }
+        Builder& EnsureCapacity(size_t n) { mstr_EnsureCapacity(this, n); return *this; }
+        Builder& AppendChar(char c) { mstr_AppendChar(this, c); return *this; }
+        Builder& AppendString(char const* str, size_t str_len) { mstr_AppendString(this, str, str_len); return *this; }
+        Builder& AppendStringZ(char const* str) { mstr_AppendStringZ(this, str); return *this; }
+        Builder& TrimEnd() { mstr_TrimEnd(this); return *this; }
+        char* ToStringZ() { return mstr_ToString(this); }
+
+        /* clang-format on */
+
+        /* Null-terminate and shrink allocation. */
+        Builder& Finish() {
+            (void)mstr_ToString(this);
+            return *this;
+        }
+
+#if defined(STB_SPRINTF_H_INCLUDE)
+        /* NOTE: If you want to use AppendFormat, include stb_sprintf.h first! */
+        Builder& AppendFormat(char const* format, ...);
+        Builder& AppendFormatV(char const* format, va_list args);
+#endif /* defined(STB_SPRINTF_H_INCLUDE) */
+    };
+} /* namespace mstr */
+#endif /* defined(__cplusplus) */
+
+bool mstr_IsWhitespace(char c);
+bool mstr_IsDigit(char c);
+
 typedef union mstr_Number {
     double f64;
     uint64_t u64;
@@ -73,45 +119,6 @@ typedef struct mstr_ParseResult {
 mstr_ParseResult mstr_ParseFloat(char const* str_ptr, size_t str_len, mstr_ParseOptions options);
 mstr_ParseResult mstr_ParseUnsignedInteger(char const* str_ptr, size_t str_len, mstr_ParseOptions options);
 mstr_ParseResult mstr_ParseSignedInteger(char const* str_ptr, size_t str_len, mstr_ParseOptions options);
-
-#if defined(__cplusplus)
-#include <new>
-
-namespace mstr {
-    struct Builder : mstr_Builder {
-        Builder() = default;
-        Builder(Builder const&) = default;
-        ~Builder() = default;
-        Builder& operator=(Builder const&) = default;
-
-        explicit Builder(mstr_Allocator in_allocator) {
-            (void)new(this) Builder{};
-            allocator = in_allocator;
-        }
-
-        /* clang-format off */
-
-        Builder& ShrinkAllocation() { mstr_ShrinkAllocation(this); return *this; }
-        Builder& Clear() { mstr_Clear(this); return *this; }
-        Builder& ClearAllocation() { mstr_ClearAllocation(this); return *this; }
-        Builder& EnsureCapacity(size_t n) { mstr_EnsureCapacity(this, n); return *this; }
-        Builder& AppendChar(char c) { mstr_AppendChar(this, c); return *this; }
-        Builder& AppendString(char const* str, size_t str_len) { mstr_AppendString(this, str, str_len); return *this; }
-        Builder& AppendStringZ(char const* str) { mstr_AppendStringZ(this, str); return *this; }
-        Builder& TrimEnd() { mstr_TrimEnd(this); return *this; }
-
-        /* clang-format on */
-
-        char* ToString() { return mstr_ToString(this); }
-
-#if defined(STB_SPRINTF_H_INCLUDE)
-        /* NOTE: If you want to use AppendFormat, include stb_sprintf.h first! */
-        Builder& AppendFormat(char const* format, ...);
-        Builder& AppendFormatV(char const* format, va_list args);
-#endif /* defined(STB_SPRINTF_H_INCLUDE) */
-    };
-} /* namespace mstr */
-#endif /* defined(__cplusplus) */
 
 #endif /* MSTR_INCLUDED */
 
@@ -151,7 +158,7 @@ static void* mstr__MtbReallocCallback(void* user, void* old_ptr, size_t old_size
     MFS_ASSERT(user);
     mtb::tAllocator& a = *(mtb::tAllocator*)user;
     mtb::tSlice<void> new_mem = a.ResizeArray(mtb::PtrSlice(old_ptr, old_size), new_size, mtb::kNoInit);
-    MSTR_ASSERT(new_mem.len == new_size);
+    MSTR_ASSERT((size_t)new_mem.len == new_size);
     return new_mem.ptr;
 }
 
@@ -184,7 +191,10 @@ void mstr_EnsureCapacity(mstr_Builder* b, size_t n) {
     }
     mstr_Allocator a = mstr__GetAllocator(b);
     size_t const default_cap = 4096;
-    size_t new_cap = b->cap == 0 ? default_cap : (3 * b->cap / 2);
+    size_t new_cap = b->cap < default_cap ? default_cap : b->cap;
+    while(new_cap < n) {
+        new_cap = (3 * new_cap) / 2;
+    }
     char* new_ptr = (char*)a.realloc_cb(a.user, b->ptr, b->cap, new_cap);
     MSTR_ASSERT(new_ptr);
     b->ptr = new_ptr;
@@ -219,6 +229,9 @@ void mstr_TrimEnd(mstr_Builder* b) {
 char* mstr_ToString(mstr_Builder* b) {
     mstr_EnsureCapacity(b, b->len + 1);
     b->ptr[b->len] = 0;
+    b->len += 1;
+    mstr_ShrinkAllocation(b);
+    b->len -= 1;
     return b->ptr;
 }
 
@@ -244,13 +257,11 @@ void mstr_AppendFormatV(mstr_Builder* b, char const* format, va_list args) {
     stbsp_vsprintfcb(&mstr__StbSprintfCallback, b, buf, format, args);
 }
 
-// TODO: Make this public?
-static bool mstr__IsWhitespace(char c) {
+bool mstr_IsWhitespace(char c) {
     return c == ' ';  // TODO
 }
 
-// TODO: Make this public?
-static bool mstr__IsDigit(char c) {
+bool mstr_IsDigit(char c) {
     switch(c) {
         case '0':  // fallthrough
         case '1':  // fallthrough
@@ -270,7 +281,7 @@ static size_t mstr__TrimWhitespaceFront(char const** inout_ptr, size_t* inout_le
     char const* ptr = *inout_ptr;
     size_t len = *inout_len;
 
-    while(len && mstr__IsWhitespace(ptr[0])) {
+    while(len && mstr_IsWhitespace(ptr[0])) {
         ++ptr;
         --len;
     }
@@ -340,7 +351,7 @@ mstr_ParseResult mstr_ParseFloat(char const* str_ptr, size_t str_len, mstr_Parse
             if(len && ptr[0] == '.') {
                 ++ptr;
                 --len;
-                while(len && mstr__IsDigit(ptr[0])) {
+                while(len && mstr_IsDigit(ptr[0])) {
                     uint64_t NewDigit = (uint64_t)(ptr[0] - '0');
                     decimal_value = (10 * decimal_value) + NewDigit;
                     has_decimal_part = true;
@@ -408,7 +419,7 @@ mstr_ParseResult mstr_ParseUnsignedInteger(char const* str_ptr, size_t str_len, 
             uint64_t numerical_part = 0;
             bool has_numerical_part = false;
 
-            while(len && mstr__IsDigit(ptr[0])) {
+            while(len && mstr_IsDigit(ptr[0])) {
                 numerical_part = (10 * numerical_part) + (*ptr - '0');
                 has_numerical_part = true;
                 --len;
@@ -447,7 +458,7 @@ mstr_ParseResult mstr_ParseSignedInteger(char const* str_ptr, size_t str_len, ms
         uint64_t numerical_part = 0;
         bool has_numerical_part = false;
 
-        while(len && mstr__IsDigit(ptr[0])) {
+        while(len && mstr_IsDigit(ptr[0])) {
             numerical_part = (10 * numerical_part) + (*ptr - '0');
             has_numerical_part = true;
             --len;
