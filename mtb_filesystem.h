@@ -5,6 +5,20 @@
     for internal use of this library. Public facing identifiers start with
     mfs_ (types and functions both) or MFS_ (preprocessor stuff).
 
+    Strings are usually provided as a ptr+len pair. These strings are always
+    null-terminated but len never includes the terminating null-character.
+
+    Functions may temporarily allocate memory internally for result values.
+    Result pointers are only valid until the next API call. So it's best to
+    copy any results on the caller side if that result is needed further.
+    Ownership is never passed to the called.
+
+    Error messages are formatted using a dedicated internal buffer. This buffer is re-used for every subsequent error messages. If the test of an error message is required to live longer, it should be copied.
+
+    Example:
+        .str = "foo", // points to `char const[4]{'f', 'o', 'o', '\0'}`
+        .len = 3,
+
     Public API section index:
         [Section] Error codes
         [Section] Public API
@@ -16,15 +30,22 @@
         [Section] POSIX Backend
         [Section] WIN32 Backend
         [Section] Public API Implementation
-
-    TODO:
-    * Mention that error messages are only valid until the next error is produced because an internal buffer is used internally for those messages.
 */
 
+// ReSharper disable CppClangTidyClangDiagnosticReservedIdentifier
+// ReSharper disable CppClangTidyClangDiagnosticReservedMacroIdentifier
+// ReSharper disable CppClangTidyBugproneReservedIdentifier
+// ReSharper disable CppInconsistentNaming
+// ReSharper disable CppParameterMayBeConstPtrOrRef
+// ReSharper disable CppIfCanBeReplacedByConstexprIf
+// ReSharper disable CppClangTidyModernizeUseAuto
+// ReSharper disable CppZeroConstantCanBeReplacedWithNullptr
 #ifndef MFS_INCLUDED
 #define MFS_INCLUDED
 
 #include <stdint.h>
+
+// ReSharper disable once CppUnusedIncludeDirective
 #include <stdbool.h>
 
 #if !defined(MFS_FN)
@@ -70,7 +91,7 @@ typedef enum mfs_ErrorCode {
 
 typedef struct mfs_Error {
     mfs_ErrorCode code;
-    char const* message;
+    char const* message;  // null-terminated.
 } mfs_Error;
 
 /*
@@ -86,6 +107,12 @@ typedef enum mfs_PathType {
     mfs_PathType_Windows,
     mfs_PathType_Posix,
 } mfs_PathType;
+
+typedef struct mfs_ResolvedPath {
+    mfs_Error error;
+    char const* ptr;
+    ptrdiff_t len;
+} mfs_ResolvedPath;
 
 typedef struct mfs_EntireFile {
     mfs_Error error;
@@ -248,6 +275,12 @@ MFS_FN mfs_String mfs_WithoutSuffix(mfs_String path);
 MFS_FN mfs_String mfs_WithoutSuffixZ(char const* path_cstr);
 
 /*
+    Produces a fully qualified and canonicalized path.
+*/
+MFS_FN mfs_ResolvedPath mfs_ResolvePath(mfs_String path_utf8);
+MFS_FN mfs_ResolvedPath mfs_ResolvePathZ(char const* path_utf8);
+
+/*
     Try to read the entire contents of a file. The result data will remain
     valid until mfs_Reset() is called.
 */
@@ -355,7 +388,7 @@ static mfs_Error mfs__MakeError(mfs_ErrorCode ec, char const* format, ...) {
     result.code = ec;
     va_list args;
     va_start(args, format);
-    (void)vsnprintf(mfs__error_buf, sizeof(mfs__error_buf), format, args);
+    (void)vsnprintf(mfs__error_buf, sizeof(mfs__error_buf), format, args);  // NOLINT(clang-diagnostic-format-nonliteral)
     va_end(args);
     result.message = mfs__error_buf;
     return result;
@@ -367,6 +400,7 @@ static mfs_Error mfs_NoError() {
     return result;
 }
 
+// ReSharper disable once CppDefaultInitializationWithNoUserConstructor
 static const mfs_Allocator mfs__no_allocator;
 
 static void* mfs__LibcReallocProc(void* user_data, void* old_ptr, size_t old_size, size_t new_size) {
@@ -747,7 +781,42 @@ static mfs__win32_Utf8Result mfs__win32_ConvertToUtf8(mfs__Arena** arena, mfs_Al
     return result;
 }
 
-static mfs__win32_WideStringResult mfs__win32_ResolvePath(mfs__Arena** arena, mfs_Allocator allocator, mfs_String path_utf8) {
+static mfs_ResolvedPath mfs__win32_ResolvePath(mfs_String path_utf8) {
+    mfs_ResolvedPath result{};
+    if(!mfs__state.ready) {
+        result.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidOperation, "Not initialized. Did you forget to call mfs_Setup?");
+        return result;
+    }
+
+    mfs__Arena* temp_arena = mfs__EmbedArena(mfs__state.buf, sizeof(mfs__state.buf), 0);
+    mfs__win32_WideStringResult path_win32 = mfs__win32_ConvertToWideString(&temp_arena, mfs__no_allocator, path_utf8.ptr, path_utf8.len);
+    if(path_win32.error.code) {
+        result.error = path_win32.error;
+        return result;
+    }
+
+    // NOTE: GetFullPathNameW returns a length in wchar_t's. The terminating null-character is only included in that length if the input buffer is NULL.
+
+    DWORD full_path_len_with_nullchar = GetFullPathNameW(path_win32.ptr, 0, NULL, NULL);
+
+    mfs__ReallocResult dest_buffer_result = mfs__ArenaRealloc(&temp_arena, mfs__no_allocator, NULL, 0, sizeof(wchar_t) * full_path_len_with_nullchar);
+    if(dest_buffer_result.error.code) {
+        result.error = dest_buffer_result.error;
+        return result;
+    }
+    wchar_t* full_path_ptr = (wchar_t*)dest_buffer_result.new_ptr;
+    DWORD full_path_len = GetFullPathNameW(path_win32.ptr, full_path_len_with_nullchar, full_path_ptr, NULL);
+    MFS_ASSERT(full_path_len + 1 == full_path_len_with_nullchar);
+
+    mfs__win32_Utf8Result full_path_utf8 = mfs__win32_ConvertToUtf8(&temp_arena, mfs__no_allocator, full_path_ptr, full_path_len);
+    if(full_path_utf8.error.code) {
+        result.error = full_path_utf8.error;
+        return result;
+    }
+
+    result.ptr = full_path_utf8.ptr;
+    result.len = full_path_utf8.len;
+    return result;
 }
 
 static mfs_EntireFile mfs__win32_ReadEntireFile(mfs_String path_utf8) {
@@ -760,6 +829,10 @@ static mfs_EntireFile mfs__win32_ReadEntireFile(mfs_String path_utf8) {
 
     mfs__Arena* temp_arena = mfs__EmbedArena(mfs__state.buf, sizeof(mfs__state.buf), 0);
     mfs__win32_WideStringResult path_win32 = mfs__win32_ConvertToWideString(&temp_arena, mfs__no_allocator, path_utf8.ptr, path_utf8.len);
+    if(path_win32.error.code) {
+        result.error = path_win32.error;
+        return result;
+    }
 
     HANDLE file = CreateFileW(
         path_win32.ptr,   // [in]           LPCWSTR               lpFileName,
@@ -791,7 +864,7 @@ static mfs_EntireFile mfs__win32_ReadEntireFile(mfs_String path_utf8) {
             CloseHandle(file);
             return result;
         }
-        ptr = (uint8_t*)(uintptr_t)alloc_result.new_ptr;
+        ptr = (uint8_t*)alloc_result.new_ptr;
     }
 
     size_t remain = size;
@@ -843,8 +916,6 @@ static mfs_CreateDirectoriesResult mfs__win32_CreateDirectories(mfs_String path_
         return result;
     }
 
-    result.already_exists = true;
-
     ptrdiff_t end = 0;
     while(end < name_len) {
         while(end < name_len) {
@@ -858,9 +929,6 @@ static mfs_CreateDirectoriesResult mfs__win32_CreateDirectories(mfs_String path_
         mfs__win32_WideStringResult path_win32 = mfs__win32_ConvertToWideString(&temp_arena, mfs__no_allocator, path_utf8.ptr, path_utf8.len);
 
         bool ok = CreateDirectoryW(path_win32.ptr, NULL) != 0;
-        if(ok) {
-            result.already_exists = false;
-        }
         DWORD error = GetLastError();
         if(!ok && error == ERROR_ALREADY_EXISTS) {
             ok = true;
@@ -902,6 +970,34 @@ static mfs_FileIterator mfs__win32_OpenFileIterator(mfs_String dir_utf8) {
     }
 
     mfs__Arena* temp_arena = mfs__EmbedArena(mfs__state.buf, sizeof(mfs__state.buf), 0);
+    mfs__win32_WideStringResult converted_input_dir = mfs__win32_ConvertToWideString(&temp_arena, mfs__no_allocator, dir_utf8.ptr, dir_utf8.len);
+    if(converted_input_dir.error.code) {
+        iter.error = converted_input_dir.error;
+        return iter;
+    }
+
+    // NOTE: GetFullPathNameW returns a length in wchar_t's. The terminating null-character is only included in that length if the input buffer is NULL.
+
+    DWORD full_path_len_with_nullchar = GetFullPathNameW(converted_input_dir.ptr, 0, NULL, NULL);
+    if(full_path_len_with_nullchar == 0) {
+        iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_Unkown, "GetFullPathNameW failed.");
+        return iter;
+    }
+
+    // NOTE: Allocate two more chars so we can append "\\*" later.
+    DWORD full_path_allocation_size_in_wchars = full_path_len_with_nullchar + 2;
+    auto full_path_allocation = mfs__ArenaRealloc(&temp_arena, mfs__no_allocator, NULL, 0, sizeof(wchar_t) * full_path_allocation_size_in_wchars);
+    if(full_path_allocation.error.code) {
+        iter.error = converted_input_dir.error;
+        return iter;
+    }
+    auto* full_path = (wchar_t*)full_path_allocation.new_ptr;
+    DWORD full_path_len = GetFullPathNameW(converted_input_dir.ptr, full_path_allocation_size_in_wchars, full_path, NULL);
+    MFS_ASSERT(full_path_len + 1 == full_path_len_with_nullchar);
+
+    full_path[full_path_len + 0] = '\\';
+    full_path[full_path_len + 1] = '*';
+    full_path[full_path_len + 2] = 0;
 
     mfs__ReallocResult internals_alloc_result = mfs__GlobalRealloc(NULL, 0, sizeof(mfs__win32_FileIterator));
     if(internals_alloc_result.error.code) {
@@ -910,49 +1006,7 @@ static mfs_FileIterator mfs__win32_OpenFileIterator(mfs_String dir_utf8) {
     }
     mfs__win32_FileIterator* win32_iter = (mfs__win32_FileIterator*)internals_alloc_result.new_ptr;
 
-    /*
-        We convert the input path from UTF-8 to a wchar_t equivalent that
-        windows expects, be also append "\*" to the string because that's the
-        syntax `FindFirstFile` expects. Since we're not interested in the
-        trailing "\*" part, we strip it off again after we called
-        `FindFirstFile`.
-     */
-    mfs__Arena* iter_arena = mfs__EmbedArena(win32_iter->buf, sizeof(win32_iter->buf), 0);
-    mfs__ReallocResult path_copy_dest_result = mfs__ArenaRealloc(&iter_arena, mfs__no_allocator, NULL, 0, dir_utf8.len + 1);
-    if(path_copy_dest_result.error.code) {
-        iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidFileName, "Input path is too long");
-        return iter;
-    }
-
-    win32_iter->dir_len = dir_utf8.len;
-    win32_iter->dir_ptr = (char*)path_copy_dest_result.new_ptr;
-    memcpy(win32_iter->dir_ptr, dir_utf8.ptr, win32_iter->dir_len);
-    win32_iter->dir_ptr[win32_iter->dir_len] = 0;
-
-    mfs__win32_WideStringResult search_path = mfs__win32_ConvertToWideString(&temp_arena, mfs__no_allocator, dir_utf8.ptr, dir_utf8.len);
-    if(search_path.error.code) {
-        iter.error = search_path.error;
-        mfs__GlobalRealloc(win32_iter, sizeof(mfs__win32_FileIterator), 0);
-        return iter;
-    }
-
-    // Make room for 2 more characters "\*".
-    size_t prev_size = search_path.allocation_size;
-    search_path.allocation_size = search_path.allocation_size + 2 * sizeof(wchar_t);
-    mfs__ReallocResult extended = mfs__ArenaRealloc(&temp_arena, mfs__no_allocator, search_path.ptr, prev_size, search_path.allocation_size);
-    if(extended.error.code) {
-        iter.error = extended.error;
-        mfs__GlobalRealloc(win32_iter, sizeof(mfs__win32_FileIterator), 0);
-        return iter;
-    }
-    search_path.ptr = (wchar_t*)extended.new_ptr;
-
-    // Append "\*"
-    search_path.ptr[search_path.len] = '\\';
-    search_path.ptr[search_path.len + 1] = '*';
-    search_path.ptr[search_path.len + 2] = 0;
-
-    win32_iter->win32_handle = FindFirstFileW(search_path.ptr, &win32_iter->win32_data);
+    win32_iter->win32_handle = FindFirstFileW(full_path, &win32_iter->win32_data);
     if(win32_iter->win32_handle == INVALID_HANDLE_VALUE) {
         if(GetLastError() == ERROR_FILE_NOT_FOUND) {
             iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_NotFound, "Unable to find file '%.*s'", (int)dir_utf8.len, dir_utf8.ptr);
@@ -962,7 +1016,18 @@ static mfs_FileIterator mfs__win32_OpenFileIterator(mfs_String dir_utf8) {
         mfs__GlobalRealloc(win32_iter, sizeof(mfs__win32_FileIterator), 0);
         return iter;
     }
+    mfs__Arena* iter_arena = mfs__EmbedArena(win32_iter->buf, sizeof(win32_iter->buf), 0);
 
+    mfs__win32_Utf8Result path_copy = mfs__win32_ConvertToUtf8(&iter_arena, mfs__no_allocator, full_path, (ptrdiff_t)full_path_len);
+    if(path_copy.error.code) {
+        // iter.error = MFS_MAKE_ERROR(mfs_ErrorCode_InvalidFileName, "Input path is too long");
+        iter.error = path_copy.error;
+        mfs__GlobalRealloc(win32_iter, sizeof(mfs__win32_FileIterator), 0);
+        return iter;
+    }
+
+    win32_iter->dir_len = path_copy.len;
+    win32_iter->dir_ptr = path_copy.ptr;
     win32_iter->arena_fill = iter_arena->fill;
     iter.internals = win32_iter;
     return iter;
@@ -1078,6 +1143,7 @@ void mfs_Setup(mfs_SetupDesc const* setup_desc) {
     MFS_ASSERT(setup_desc);
     mfs__state.desc = *setup_desc;
     if(setup_desc->path_type == mfs_PathType_Auto) {
+        // ReSharper disable once CppUnreachableCode
         if(MFS__WIN32) {
             mfs__state.path_type = mfs_PathType_Windows;
         } else {
@@ -1257,6 +1323,18 @@ MFS_FN mfs_String mfs_WithoutSuffix(mfs_String path) {
 
 MFS_FN mfs_String mfs_WithoutSuffixZ(char const* path_cstr) {
     return mfs_WithoutSuffix(mfs_String(path_cstr));
+}
+
+mfs_ResolvedPath mfs_ResolvePath(mfs_String path_utf8) {
+#if MFS__POSIX
+    return mfs__posix_ResolvePath(path_utf8);
+#elif MFS__WIN32
+    return mfs__win32_ResolvePath(path_utf8);
+#endif
+}
+
+mfs_ResolvedPath mfs_ResolvePathZ(char const* path_utf8) {
+    return mfs_ResolvePath(mfs_StringZ(path_utf8));
 }
 
 mfs_EntireFile mfs_ReadEntireFile(mfs_String path_utf8) {
