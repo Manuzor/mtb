@@ -1256,7 +1256,7 @@ namespace mtb {
         tAllocator allocator;
 
         /// May be null. Fallback employs amortized growth.
-        ptrdiff_t (*calc_capacity)(tArray<T>& array, ptrdiff_t MinCapacity);
+        ptrdiff_t (*calc_capacity)(tArray& array, ptrdiff_t MinCapacity){};
 
         union {
             struct
@@ -1268,11 +1268,11 @@ namespace mtb {
             };
 
             /// Convenient access of the slice currently in use.
-            tSlice<T> items;
+            tSlice<T> items{};
         };
 
         /// Number of allocated elements.
-        ptrdiff_t cap;
+        ptrdiff_t cap{};
 
         // --------------------------------------------------
         // --------------------------------------------------
@@ -1353,7 +1353,7 @@ namespace mtb {
 
     template<typename T>
     T* GetLast(const tArray<T>& array) {
-        return array ? (array + (array.len - 1)) : nullptr;
+        return array ? PtrOffset(array.ptr, array.len - 1) : nullptr;
     }
 
     template<typename T>
