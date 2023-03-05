@@ -22,8 +22,10 @@ save it in a `mtb.natvis` file somewhere reachable by your debugger.
 
 */
 
-#if !defined(MTB__INCLUDED)
-#define MTB__INCLUDED
+// ReSharper disable CppInconsistentNaming
+// ReSharper disable CppSpecialFunctionWithoutNoexceptSpecification
+#if !defined(MTB_INCLUDED)
+#define MTB_INCLUDED
 
 //
 // Enable usually disabled code for browsing with Visual Studio's Intellisense.
@@ -79,6 +81,8 @@ save it in a `mtb.natvis` file somewhere reachable by your debugger.
 #elif !defined(MTB_USE_STB_SPRINTF)
 #define MTB_USE_STB_SPRINTF 0
 #endif
+
+#define MTB_NODISCARD [[nodiscard]]
 
 #include <float.h>   // FLT_MAX, DBL_MAX, LDBL_MAX
 #include <new>       // Placement-new
@@ -147,9 +151,9 @@ namespace mtb {
 #endif
 
 #if !defined(MTB_CONCAT)
-#define MTB_CONCAT(a, b) MTB__CONCAT0(a, b)
-#define MTB__CONCAT0(a, b) MTB__CONCAT1(a, b)
-#define MTB__CONCAT1(a, b) a##b
+#define MTB_CONCAT(a, b) MTB_CONCAT_HELPER_0(a, b)
+#define MTB_CONCAT_HELPER_0(a, b) MTB_CONCAT_HELPER_1(a, b)
+#define MTB_CONCAT_HELPER_1(a, b) a##b
 #endif
 
 #define MTB_sizeof(TYPE) (::mtb::tSizeOf<TYPE>::value)
@@ -201,29 +205,46 @@ namespace mtb {
 
 namespace mtb {
     namespace impl {
+        // ReSharper disable once CppFunctionIsNotImplemented
         template<typename T, size_t N>
         char (&ArrayCountHelper(T (&)[N]))[N];
     }
 
     template<typename T, size_t N>
-    inline constexpr bool IsValidIndex(T (&array)[N], ptrdiff_t index) {
+    constexpr bool IsValidIndex(T (&array)[N], ptrdiff_t index) {
         (void)array;
         return 0 <= index && static_cast<size_t>(index) < N;
     }
 
     template<typename T, size_t N>
-    inline constexpr T& ArrayLast(T (&array)[N]) {
+    constexpr T& ArrayLast(T (&array)[N]) {
         return array[N - 1];
     }
 
-    template<typename T>
-    inline constexpr T* PtrOffset(T* ptr, ptrdiff_t offset) {
-        return (T*)(((uintptr_t)ptr) + (offset * MTB_sizeof(T)));
+    constexpr void* PtrOffset(void* ptr, ptrdiff_t offset) {
+        return (uint8_t*)ptr + offset;
+    }
+
+    constexpr void const* PtrOffset(void const* ptr, ptrdiff_t offset) {
+        return (uint8_t const*)ptr + offset;
+    }
+
+    constexpr void volatile* PtrOffset(void volatile* ptr, ptrdiff_t offset) {
+        return (uint8_t volatile*)ptr + offset;
+    }
+
+    constexpr void const volatile* PtrOffset(void const volatile* ptr, ptrdiff_t offset) {
+        return (uint8_t const volatile*)ptr + offset;
     }
 
     template<typename T>
-    inline constexpr ptrdiff_t PtrDistance(T* a, T* b) {
-        return ((ptrdiff_t)(uintptr_t)a - (ptrdiff_t)(uintptr_t)b) / MTB_sizeof(T);
+    constexpr T* PtrOffset(T* ptr, ptrdiff_t offset) {
+        return ptr + offset;
+    }
+
+    template<typename T>
+    constexpr ptrdiff_t PtrDistance(T* a, T* b) {
+        return (ptrdiff_t)(((uintptr_t)a - (uintptr_t)b) / MTB_sizeof(T));
     }
 }  // namespace mtb
 
@@ -285,28 +306,28 @@ namespace mtb {
 
     namespace impl {
         // clang-format off
-        template<typename T> struct tRemovePointer            { using tType = T; };
-        template<typename T> struct tRemovePointer<T*>        { using tType = T; };
+        template<typename T> struct tRemovePointerHelper            { using tType = T; };
+        template<typename T> struct tRemovePointerHelper<T*>        { using tType = T; };
 
         // clang-format on
     }  // namespace impl
 
     // clang-format off
-    template<typename T> using tRemovePointer = typename impl::tRemovePointer<T>::tType;
+    template<typename T> using tRemovePointer = typename impl::tRemovePointerHelper<T>::tType;
 
     // clang-format on
 
     namespace impl {
         // clang-format off
-        template<typename T> struct tRemoveConst                   { using tType = T; };
-        template<typename T> struct tRemoveConst<T const>          { using tType = T; };
-        template<typename T> struct tRemoveConst<T const volatile> { using tType = T volatile; };
+        template<typename T> struct tRemoveConstHelper                   { using tType = T; };
+        template<typename T> struct tRemoveConstHelper<T const>          { using tType = T; };
+        template<typename T> struct tRemoveConstHelper<T const volatile> { using tType = T volatile; };
 
         // clang-format on
     }  // namespace impl
 
     // clang-format off
-    template<typename T> using tRemoveConst = typename impl::tRemoveConst<T>::tType;
+    template<typename T> using tRemoveConst = typename impl::tRemoveConstHelper<T>::tType;
 
     // clang-format on
 
@@ -374,7 +395,7 @@ namespace mtb {
     };
 
     template<typename TOut, typename TIn>
-    inline TOut IntCast(TIn value) {
+    TOut IntCast(TIn value) {
         TOut result = (TOut)value;
         MTB_ASSERT((TIn)result == value && "Cast would truncate.");
         return result;
@@ -429,15 +450,15 @@ namespace mtb {
         }
 
         template<typename T, typename U>
-        inline static void CopyAssign(T* dest, size_t dest_len, U* src, size_t src_len) {
+        static void CopyAssign(T* dest, size_t dest_len, U* src, size_t src_len) {
             CopyConstruct(dest, dest_len, src, src_len);
         }
 
-        inline static void SetConstruct(void* items, size_t len, int repeated_item) { MTB_memset(items, repeated_item, len); }
+        static void SetConstruct(void* items, size_t len, int repeated_item) { MTB_memset(items, repeated_item, len); }
 
-        inline static void SetConstruct(uint8_t* items, size_t len, int repeated_item) { MTB_memset(items, repeated_item, len); }
+        static void SetConstruct(uint8_t* items, size_t len, int repeated_item) { MTB_memset(items, repeated_item, len); }
 
-        inline static void SetConstruct(int8_t* items, size_t len, int repeated_item) { MTB_memset(items, repeated_item, len); }
+        static void SetConstruct(int8_t* items, size_t len, int repeated_item) { MTB_memset(items, repeated_item, len); }
 
         template<typename T, typename U>
         static void SetConstruct(T* items, size_t len, U repeated_item) {
@@ -454,7 +475,7 @@ namespace mtb {
         }
 
         template<typename T>
-        inline static void Destruct(T* items, size_t len) {
+        static void Destruct(T* items, size_t len) {
             (void)items;
             (void)len;
             // Nothing to do for POD types.
@@ -563,28 +584,29 @@ namespace mtb {
 // --------------------------------------------------
 // -- #Section Defer --------------------------------
 // --------------------------------------------------
-#define MTB_DEFER auto MTB_CONCAT(_mtb_defer, __LINE__) = ::mtb::impl::DeferHelper() = [&]()
+#define MTB_DEFER auto MTB_CONCAT(_mtb_defer, __LINE__) = ::mtb::impl::tDeferHelper{} = [&]()
 
 namespace mtb::impl {
-    struct DeferHelper {
-        template<typename TDeferFunc>
+    struct tDeferHelper {
+        template<typename TDeferredFunc>
         struct Impl {
-            TDeferFunc deferred;
+            TDeferredFunc deferred;
 
             Impl() = delete;
             Impl(Impl const&) = delete;
+            Impl(Impl&&) = delete;
             Impl& operator=(Impl const&) = delete;
             Impl& operator=(Impl&&) = delete;
 
-            inline Impl(TDeferFunc&& in_deferred)
-                : deferred{ForwardCast<TDeferFunc>(in_deferred)} {}
+            Impl(TDeferredFunc&& in_deferred)
+                : deferred{ForwardCast<TDeferredFunc>(in_deferred)} {}
 
-            inline ~Impl() { deferred(); }
+            ~Impl() { deferred(); }
         };
 
         template<typename TDeferFunc>
-        inline Impl<TDeferFunc> operator=(TDeferFunc&& in_deferred) {
-            return Impl<TDeferFunc>{(TDeferFunc &&) in_deferred};
+        Impl<TDeferFunc> operator=(TDeferFunc&& in_deferred) {  // NOLINT(misc-unconventional-assign-operator)
+            return Impl<TDeferFunc>{ForwardCast<TDeferFunc>(in_deferred)};
         }
     };
 }  // namespace mtb::impl
@@ -610,18 +632,18 @@ namespace mtb {
         ptrdiff_t len;
 
         // C++ 11 range-based for interface
-        constexpr void const* begin() const { return ptr; }
+        MTB_NODISCARD constexpr void const* begin() const { return ptr; }
 
         // C++ 11 range-based for interface
-        constexpr void const* end() const { return PtrOffset(ptr, len); }
+        MTB_NODISCARD constexpr void const* end() const { return PtrOffset(ptr, len); }
 
         // C-array like pointer offset. slice + 3 is equivalent to slice.ptr + 3, except the former does bounds checking.
-        inline void const* operator+(ptrdiff_t index) const {
+        MTB_NODISCARD void const* operator+(ptrdiff_t index) const {
             MTB_ASSERT(0 <= index && index < len);
             return PtrOffset(ptr, index);
         }
 
-        inline constexpr explicit operator bool() const { return ptr && len > 0; }
+        MTB_NODISCARD constexpr explicit operator bool() const { return len > 0; }
     };
 
     // special case - void (mutable)
@@ -631,21 +653,21 @@ namespace mtb {
         ptrdiff_t len;
 
         // C++ 11 range-based for interface
-        constexpr void* begin() const { return ptr; }
+        MTB_NODISCARD constexpr void* begin() const { return ptr; }
 
         // C++ 11 range-based for interface
-        constexpr void* end() const { return PtrOffset(ptr, len); }
+        MTB_NODISCARD constexpr void* end() const { return PtrOffset(ptr, len); }
 
         // C-array like pointer offset. slice + 3 is equivalent to slice.ptr + 3, except the former does bounds checking.
-        inline void* operator+(ptrdiff_t index) const {
+        MTB_NODISCARD void* operator+(ptrdiff_t index) const {
             MTB_ASSERT(0 <= index && index < len);
             return PtrOffset(ptr, index);
         }
 
-        inline constexpr explicit operator bool() const { return ptr && len > 0; }
+        MTB_NODISCARD constexpr explicit operator bool() const { return ptr && len > 0; }
 
         // Implicit conversion to the const version.
-        inline constexpr operator tSlice<void const>() const { return {ptr, len}; }
+        MTB_NODISCARD constexpr operator tSlice<void const>() const { return {ptr, len}; }
     };
 
     // special case - T const
@@ -655,22 +677,22 @@ namespace mtb {
         ptrdiff_t len;
 
         // C++ 11 range-based for interface
-        constexpr T const* begin() const { return ptr; }
+        MTB_NODISCARD constexpr T const* begin() const { return ptr; }
 
         // C++ 11 range-based for interface
-        constexpr T const* end() const { return PtrOffset(ptr, len); }
+        MTB_NODISCARD constexpr T const* end() const { return PtrOffset(ptr, len); }
 
         // C-array like pointer offset. slice + 3 is equivalent to slice.ptr + 3, except the former does bounds checking.
-        inline T const* operator+(ptrdiff_t index) const {
+        MTB_NODISCARD T const* operator+(ptrdiff_t index) const {
             MTB_ASSERT(0 <= index && index < len);
             return PtrOffset(ptr, index);
         }
 
-        inline constexpr explicit operator bool() const { return ptr && len > 0; }
+        MTB_NODISCARD constexpr explicit operator bool() const { return ptr && len > 0; }
 
-        inline T const& operator[](ptrdiff_t index) const { return *(*this + index); }
+        MTB_NODISCARD T const& operator[](ptrdiff_t index) const { return *(*this + index); }
 
-        inline constexpr operator tSlice<void const>() const { return {ptr, (ptrdiff_t)(sizeof(T) * len)}; }
+        MTB_NODISCARD constexpr operator tSlice<void const>() const { return {ptr, (ptrdiff_t)(sizeof(T) * len)}; }
     };
 
     // general case - T (mutable)
@@ -680,27 +702,27 @@ namespace mtb {
         ptrdiff_t len;
 
         // C++ 11 range-based for interface
-        constexpr T* begin() const { return ptr; }
+        MTB_NODISCARD constexpr T* begin() const { return ptr; }
 
         // C++ 11 range-based for interface
-        constexpr T* end() const { return PtrOffset(ptr, len); }
+        MTB_NODISCARD constexpr T* end() const { return PtrOffset(ptr, len); }
 
         // C-array like pointer offset. slice + 3 is equivalent to slice.ptr + 3, except the former does bounds checking.
-        inline T* operator+(ptrdiff_t index) const {
+        MTB_NODISCARD T* operator+(ptrdiff_t index) const {
             MTB_ASSERT(0 <= index && index < len);
             return PtrOffset(ptr, index);
         }
 
-        inline constexpr explicit operator bool() const { return ptr && len > 0; }
+        MTB_NODISCARD constexpr explicit operator bool() const { return ptr && len > 0; }
 
-        inline T& operator[](ptrdiff_t index) const { return *(*this + index); }
+        MTB_NODISCARD T& operator[](ptrdiff_t index) const { return *(*this + index); }
 
         // Implicit conversion to the const version.
-        constexpr operator tSlice<T const>() const { return {ptr, len}; }
+        MTB_NODISCARD constexpr operator tSlice<T const>() const { return {ptr, len}; }
 
-        constexpr operator tSlice<void>() const { return {ptr, (ptrdiff_t)(sizeof(T) * len)}; }
+        MTB_NODISCARD constexpr operator tSlice<void>() const { return {ptr, (ptrdiff_t)(sizeof(T) * len)}; }
 
-        constexpr operator tSlice<void const>() const { return {ptr, (ptrdiff_t)(sizeof(T) * len)}; }
+        MTB_NODISCARD constexpr operator tSlice<void const>() const { return {ptr, (ptrdiff_t)(sizeof(T) * len)}; }
     };
 
     static_assert(MTB_IS_POD_STRICT(tSlice<char>), "char slices must be PODs");
@@ -710,37 +732,37 @@ namespace mtb {
     // --------------------------------------------------
 
     template<typename T>
-    inline constexpr tSlice<T> PtrSlice(T* ptr, ptrdiff_t len) {
+    MTB_NODISCARD constexpr tSlice<T> PtrSlice(T* ptr, ptrdiff_t len) {
         return {ptr, len};
     }
 
     template<typename T>
-    inline constexpr tSlice<T> PtrSliceBetween(T* start, T* end) {
+    MTB_NODISCARD constexpr tSlice<T> PtrSliceBetween(T* start, T* end) {
         return {start, IntCast<ptrdiff_t>(((uintptr_t)end - (uintptr_t)start) / MTB_sizeof(T))};
     }
 
     template<typename T, size_t N>
-    inline constexpr tSlice<T> ArraySlice(T (&array)[N]) {
+    MTB_NODISCARD constexpr tSlice<T> ArraySlice(T (&array)[N]) {
         return {&array[0], N};
     }
 
     template<typename T, size_t N>
-    inline constexpr tSlice<T> ArraySliceRange(T (&array)[N], ptrdiff_t offset, ptrdiff_t len) {
+    MTB_NODISCARD constexpr tSlice<T> ArraySliceRange(T (&array)[N], ptrdiff_t offset, ptrdiff_t len) {
         return SliceRange(ArraySlice(array), offset, len);
     }
 
     template<typename T, size_t N>
-    inline constexpr tSlice<T> ArraySliceBetween(T (&array)[N], ptrdiff_t first_index, ptrdiff_t one_past_last_index) {
+    MTB_NODISCARD constexpr tSlice<T> ArraySliceBetween(T (&array)[N], ptrdiff_t first_index, ptrdiff_t one_past_last_index) {
         return SliceBetween(ArraySlice(array), first_index, one_past_last_index);
     }
 
     template<typename T, size_t N>
-    inline constexpr tSlice<T> ArraySliceOffset(T (&array)[N], ptrdiff_t offset) {
+    MTB_NODISCARD constexpr tSlice<T> ArraySliceOffset(T (&array)[N], ptrdiff_t offset) {
         return SliceBetween(ArraySlice(array), offset, N);
     }
 
     template<typename T>
-    inline constexpr tSlice<T> StructSlice(T& item) {
+    MTB_NODISCARD constexpr tSlice<T> StructSlice(T& item) {
         static_assert(!traits::is_pointer<T>, "Invalid type. To create a slice from a pointer use PtrSlice()");
         return {&item, 1};
     }
@@ -763,39 +785,39 @@ namespace mtb {
     }
 
     template<typename T>
-    inline tSlice<T> SliceBetween(tSlice<T> slice, ptrdiff_t first_index, ptrdiff_t one_past_last_index) {
+    MTB_NODISCARD tSlice<T> SliceBetween(tSlice<T> slice, ptrdiff_t first_index, ptrdiff_t one_past_last_index) {
         return SliceRange(slice, first_index, one_past_last_index - first_index);
     }
 
     template<typename T>
-    inline tSlice<T> SliceOffset(tSlice<T> slice, ptrdiff_t offset) {
+    MTB_NODISCARD tSlice<T> SliceOffset(tSlice<T> slice, ptrdiff_t offset) {
         return SliceBetween(slice, offset, slice.len);
     }
 
     template<typename T>
-    inline constexpr bool IsValidIndex(tSlice<T> slice, ptrdiff_t index) {
+    MTB_NODISCARD constexpr bool IsValidIndex(tSlice<T> slice, ptrdiff_t index) {
         return 0 <= index && index < slice.len;
     }
 
     /// Raw byte-size of the slice's underlying memory.
     template<typename T>
-    inline constexpr size_t SliceSize(tSlice<T> slice) {
+    MTB_NODISCARD constexpr size_t SliceSize(tSlice<T> slice) {
         return MTB_sizeof(T) * slice.len;
     }
 
     template<typename T>
-    inline constexpr T* SliceLast(tSlice<T> slice) {
+    MTB_NODISCARD constexpr T* SliceLast(tSlice<T> slice) {
         return slice.len == 0 ? nullptr : PtrOffset(slice.ptr, slice.len - 1);
     }
 
     template<typename U, typename T>
-    inline tSlice<U> SliceCast(tSlice<T> slice) {
+    MTB_NODISCARD tSlice<U> SliceCast(tSlice<T> slice) {
         MTB_ASSERT((MTB_sizeof(T) * slice.len) % MTB_sizeof(U) == 0);
         return PtrSliceBetween(reinterpret_cast<U*>(slice.begin()), reinterpret_cast<U*>(slice.end()));
     }
 
     template<typename T>
-    tSlice<T> SliceRemoveConst(tSlice<T const> slice) { return PtrSlice(const_cast<T*>(slice.ptr), slice.len); }
+    MTB_NODISCARD tSlice<T> SliceRemoveConst(tSlice<T const> slice) { return PtrSlice(const_cast<T*>(slice.ptr), slice.len); }
 
     template<typename D, typename S>
     void SliceCopyBytes(tSlice<D> dest, tSlice<S> src) {
@@ -804,7 +826,7 @@ namespace mtb {
     }
 
     template<typename T>
-    bool SliceIsZero(tSlice<T> slice) {
+    MTB_NODISCARD bool SliceIsZero(tSlice<T> slice) {
         tSlice<uint8_t const> bytes = PtrSlice((uint8_t const*)slice.ptr, SliceSize(slice));
         bool result = true;
         for(uint8_t byte : bytes) {
@@ -817,12 +839,12 @@ namespace mtb {
     }
 
     template<typename T>
-    inline void SliceSetZero(tSlice<T> slice) {
+    void SliceSetZero(tSlice<T> slice) {
         SetZero(slice.ptr, MTB_sizeof(T) * slice.len);
     }
 
     inline void SliceReverseRaw(tSlice<void> slice) {
-        uint8_t* byte_ptr = (uint8_t*)slice.ptr;
+        auto* byte_ptr = (uint8_t*)slice.ptr;
         size_t const num_swaps = slice.len / 2;
         for(size_t front_index = 0; front_index < num_swaps; ++front_index) {
             size_t const back_index = slice.len - front_index - 1;
@@ -833,7 +855,7 @@ namespace mtb {
     }
 
     template<typename T, typename U>
-    bool SliceAreEqual(tSlice<T> a, tSlice<U> b) {
+    MTB_NODISCARD bool SlicesAreEqual(tSlice<T> a, tSlice<U> b) {
         bool result = false;
         if(a.len == b.len) {
             result = true;
@@ -847,30 +869,30 @@ namespace mtb {
         return result;
     }
 
-    bool SliceBytesAreEqual(tSlice<void const> a, tSlice<void const> b);
+    MTB_NODISCARD bool SliceBytesAreEqual(tSlice<void const> a, tSlice<void const> b);
 
-    int SliceCompareBytes(tSlice<void const> a, tSlice<void const> b);
+    MTB_NODISCARD int SliceCompareBytes(tSlice<void const> a, tSlice<void const> b);
 
     template<typename T, typename U>
-    bool SliceStartsWith(tSlice<T> a, tSlice<U> b) {
+    MTB_NODISCARD bool SliceStartsWith(tSlice<T> a, tSlice<U> b) {
         bool result = false;
         if(a.len >= b.len) {
-            result = SliceAreEqual(SliceBetween(a, 0, b.len), b);
+            result = SlicesAreEqual(SliceBetween(a, 0, b.len), b);
         }
         return result;
     }
 
     template<typename T, typename U>
-    bool SliceEndsWith(tSlice<T> a, tSlice<U> b) {
+    MTB_NODISCARD bool SliceEndsWith(tSlice<T> a, tSlice<U> b) {
         bool result = false;
         if(a.len >= b.len) {
-            result = SliceAreEqual(SliceOffset(a, a.len - b.len), b);
+            result = SlicesAreEqual(SliceOffset(a, a.len - b.len), b);
         }
         return result;
     }
 
     template<typename T, typename TPredicate>
-    tSlice<T> SliceTrimStartByPredicate(tSlice<T> slice, TPredicate Predicate) {
+    MTB_NODISCARD tSlice<T> SliceTrimStartByPredicate(tSlice<T> slice, TPredicate Predicate) {
         ptrdiff_t offset = 0;
         for(T const& item : slice) {
             if(!Predicate(item)) {
@@ -882,7 +904,7 @@ namespace mtb {
     }
 
     template<typename T, typename TPredicate>
-    tSlice<T> SliceTrimEndByPredicate(tSlice<T> slice, TPredicate Predicate) {
+    MTB_NODISCARD tSlice<T> SliceTrimEndByPredicate(tSlice<T> slice, TPredicate Predicate) {
         ptrdiff_t len = slice.len;
         for(; len > 0; --len) {
             if(!Predicate(slice.ptr[len - 1])) {
@@ -893,12 +915,12 @@ namespace mtb {
     }
 
     template<typename T, typename TPredicate>
-    tSlice<T> SliceTrimByPredicate(tSlice<T> slice, TPredicate Predicate) {
+    MTB_NODISCARD tSlice<T> SliceTrimByPredicate(tSlice<T> slice, TPredicate Predicate) {
         return SliceTrimStartByPredicate(SliceTrimEndByPredicate(slice, Predicate), Predicate);
     }
 
     template<typename T, typename U>
-    T* SliceFindItem(tSlice<T> haystack, U const& needle) {
+    MTB_NODISCARD T* SliceFindItem(tSlice<T> haystack, U const& needle) {
         T* result = nullptr;
         for(ptrdiff_t index = 0; index < haystack.len; ++index) {
             T* item = haystack.ptr + index;
@@ -911,7 +933,7 @@ namespace mtb {
     }
 
     template<typename T, typename TPredicate>
-    T* SliceFindByPredicate(tSlice<T> haystack, TPredicate Predicate) {
+    MTB_NODISCARD T* SliceFindByPredicate(tSlice<T> haystack, TPredicate Predicate) {
         T* result = nullptr;
         for(ptrdiff_t index = 0; index < haystack.len; ++index) {
             T* item = haystack.ptr + index;
@@ -924,7 +946,7 @@ namespace mtb {
     }
 
     template<typename T, typename U>
-    T* SliceFindLastItem(tSlice<T> haystack, U const& needle) {
+    MTB_NODISCARD T* SliceFindLastItem(tSlice<T> haystack, U const& needle) {
         T* result = nullptr;
         for(ptrdiff_t rIndex = haystack.len; rIndex > 0;) {
             T* item = haystack.ptr + --rIndex;
@@ -937,7 +959,7 @@ namespace mtb {
     }
 
     template<typename T, typename TPredicate>
-    T* SliceFindLastByPredicate(tSlice<T> haystack, TPredicate Predicate) {
+    MTB_NODISCARD T* SliceFindLastByPredicate(tSlice<T> haystack, TPredicate Predicate) {
         T* result = nullptr;
         for(ptrdiff_t rIndex = haystack.len; rIndex > 0;) {
             T* item = haystack.ptr + --rIndex;
@@ -1136,11 +1158,11 @@ namespace mtb {
     void ItemSetZero(T& item) { SetZero(&item, MTB_sizeof(T)); }
 
     template<typename T>
-    bool ItemIsZero(T const& item) { return SliceIsZero(PtrSlice(&item, 1)); }
+    MTB_NODISCARD bool ItemIsZero(T const& item) { return SliceIsZero(PtrSlice(&item, 1)); }
 
     /// Compare the bytes of a and b. Both types must be the same size in memory.
     template<typename T, typename U>
-    bool StructEqualsRaw(T a, U b) {
+    MTB_NODISCARD bool StructBytesAreEqual(T a, U b) {
         static_assert(MTB_sizeof(T) == MTB_sizeof(U), "Types must be of same size, otherwise an equality test of raw memory will not be useful.");
         return MTB_memcmp(&a, &b, MTB_sizeof(T)) == 0;
     }
@@ -1149,18 +1171,18 @@ namespace mtb {
         void* user;
         tSlice<void> (*realloc_proc)(void* user, tSlice<void> old_mem, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init);
 
-        inline constexpr bool IsValid() const { return realloc_proc; }
+        MTB_NODISCARD constexpr bool IsValid() const { return realloc_proc; }
 
-        inline constexpr explicit operator bool() const { return realloc_proc; }
+        MTB_NODISCARD constexpr explicit operator bool() const { return realloc_proc; }
 
         // --------------------------------------------------
         // -- Raw Allocation --------------------------------
         // --------------------------------------------------
-        tSlice<void> AllocRaw(size_t size, size_t alignment, eInit init) const;
+        MTB_NODISCARD tSlice<void> AllocRaw(size_t size, size_t alignment, eInit init) const;
 
-        tSlice<void> ReallocRaw(tSlice<void> old_mem, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) const;
+        MTB_NODISCARD tSlice<void> ReallocRaw(tSlice<void> old_mem, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) const;
 
-        tSlice<void> DupeRaw(tSlice<void> mem, size_t alignment) const;
+        MTB_NODISCARD tSlice<void> DupeRaw(tSlice<void> mem, size_t alignment) const;
 
         void FreeRaw(tSlice<void> mem, size_t alignment) const;
 
@@ -1168,19 +1190,19 @@ namespace mtb {
         // -- Typed Array Allocation ------------------------
         // --------------------------------------------------
         template<typename T>
-        tSlice<T> AllocArray(size_t len, eInit init = kClearToZero) const {
+        MTB_NODISCARD tSlice<T> AllocArray(size_t len, eInit init = kClearToZero) const {
             tSlice<void> raw = AllocRaw(len * MTB_sizeof(T), MTB_alignof(T), init);
             return SliceCast<T>(raw);
         }
 
         template<typename T>
-        tSlice<T> ResizeArray(tSlice<T> array, size_t new_len, eInit init = kClearToZero) const {
+        MTB_NODISCARD tSlice<T> ResizeArray(tSlice<T> array, size_t new_len, eInit init = kClearToZero) const {
             tSlice<void> raw = ReallocRaw(array, MTB_alignof(T), new_len * MTB_sizeof(T), MTB_alignof(T), init);
             return SliceCast<T>(raw);
         }
 
         template<typename T>
-        tSlice<T> DupeArray(tSlice<T> array) const {
+        MTB_NODISCARD tSlice<T> DupeArray(tSlice<T> array) const {
             tSlice<void> raw = DupeRaw(array, MTB_alignof(T));
             return SliceCast<T>(raw);
         }
@@ -1194,15 +1216,17 @@ namespace mtb {
         // -- Typed Single-Item Allocation ------------------
         // --------------------------------------------------
         template<typename T>
-        T* CreateOne(eInit init = kClearToZero) const {
+        MTB_NODISCARD T& CreateOne(eInit init = kClearToZero) const {
             tSlice<void> raw = AllocRaw(MTB_sizeof(T), MTB_alignof(T), init);
-            return SliceCast<T>(raw).ptr;
+            MTB_ASSERT(raw);
+            return *SliceCast<T>(raw).ptr;
         }
 
         template<typename T>
-        T* DupeOne(T& one) const {
+        MTB_NODISCARD T& DupeOne(T& one) const {
             tSlice<void> raw = DupeRaw(StructSlice(one), MTB_alignof(T));
-            return SliceCast<T>(raw).ptr;
+            MTB_ASSERT(raw);
+            return *SliceCast<T>(raw).ptr;
         }
 
         template<typename T>
@@ -1214,14 +1238,14 @@ namespace mtb {
     };
 
 #if MTB_USE_LIBC
-    tAllocator GetLibcAllocator();
+    MTB_NODISCARD tAllocator GetLibcAllocator();
 #endif
 
     struct tBufferAllocator {
         tSlice<void> buf{};
         ptrdiff_t fill{};
 
-        tAllocator Allocator();
+        MTB_NODISCARD tAllocator Allocator();
     };
 
 #if MTB_USE_STB_SPRINTF
@@ -1259,7 +1283,7 @@ namespace mtb {
         ptrdiff_t (*calc_capacity)(tArray& array, ptrdiff_t MinCapacity){};
 
         union {
-            struct
+            struct  // NOLINT(clang-diagnostic-nested-anon-types)
             {
                 /// Pointer to first element of allocated array.
                 T* ptr;
@@ -1268,7 +1292,7 @@ namespace mtb {
             };
 
             /// Convenient access of the slice currently in use.
-            tSlice<T> items{};
+            tSlice<T> items;
         };
 
         /// Number of allocated elements.
@@ -1278,15 +1302,17 @@ namespace mtb {
         // --------------------------------------------------
         // --------------------------------------------------
 
-        T* operator+(ptrdiff_t index) { return items + index; }
+        MTB_NODISCARD T* operator+(ptrdiff_t index) { return items + index; }
 
-        T& operator[](ptrdiff_t index) { return items[index]; }
+        MTB_NODISCARD T& operator[](ptrdiff_t index) { return items[index]; }
 
-        inline constexpr explicit operator bool() const { return (bool)items; }
+        MTB_NODISCARD constexpr explicit operator bool() const { return len > (ptrdiff_t)0; }
 
-        inline T* begin() const { return items.begin(); }
+        MTB_NODISCARD T* begin() const { return items.begin(); }
 
-        inline T* end() const { return items.end(); }
+        MTB_NODISCARD T* end() const { return items.end(); }
+
+        MTB_NODISCARD tSlice<T> Items() const { return {ptr, len}; }
     };
 
     template<typename T>
@@ -1352,17 +1378,17 @@ namespace mtb {
     }
 
     template<typename T>
-    T* GetLast(const tArray<T>& array) {
+    MTB_NODISCARD T* GetLast(const tArray<T>& array) {
         return array ? PtrOffset(array.ptr, array.len - 1) : nullptr;
     }
 
     template<typename T>
-    tSlice<T> GetSlack(const tArray<T>& array) {
+    MTB_NODISCARD tSlice<T> GetSlack(const tArray<T>& array) {
         return SliceOffset(PtrSlice(array.ptr, array.cap), array.len);
     }
 
     template<typename T>
-    size_t ArraySize(const tArray<T>& array) {
+    MTB_NODISCARD size_t ArraySize(const tArray<T>& array) {
         return SliceSize(array.items);
     }
 
@@ -1374,13 +1400,13 @@ namespace mtb {
 
     /// Create \a insert_count new items at the given index and return them as a slice.
     template<typename T>
-    tSlice<T> InsertN(tArray<T>& array, ptrdiff_t insert_index, ptrdiff_t insert_count, eInit init = kClearToZero) {
+    MTB_NODISCARD tSlice<T> InsertN(tArray<T>& array, ptrdiff_t insert_index, ptrdiff_t insert_count, eInit init = kClearToZero) {
         MTB_ASSERT(insert_count > 0);
         tSlice<T> result{};
         if(Reserve(array, array.len + insert_count)) {
             MTB_ASSERT(IsValidIndex(array, insert_index) || insert_index == array.len);
             tSlice<T> Allocation = PtrSlice(array.ptr, array.cap);
-            tSlice<T> result = SliceRange(Allocation, insert_index, insert_count);
+            result = SliceRange(Allocation, insert_index, insert_count);
             SliceRelocateItems(SliceOffset(Allocation, insert_index + insert_count), result);
             switch(init) {
                 case kClearToZero: SliceSetZero(SliceCast<void>(result)); break;
@@ -1401,14 +1427,14 @@ namespace mtb {
 
     /// Create a new item in the array and return a pointer to it.
     template<typename T>
-    T* InsertOne(tArray<T>& array, ptrdiff_t insert_index, eInit init = kClearToZero) {
-        return InsertN(array, insert_index, 1, init).ptr;
+    T& InsertOne(tArray<T>& array, ptrdiff_t insert_index, eInit init = kClearToZero) {
+        return *InsertN(array, insert_index, 1, init).ptr;
     }
 
     /// Create a new item in the array and copy \a item there.
     template<typename T, typename TItem>
-    T* Insert(tArray<T>& array, ptrdiff_t insert_index, TItem item) {
-        return new(InsertOne<T>(array, insert_index, kNoInit)) T(item);
+    MTB_NODISCARD T& Insert(tArray<T>& array, ptrdiff_t insert_index, TItem item) {
+        return *new(&InsertOne<T>(array, insert_index, kNoInit)) T(item);
     }
 
     /// Create \a repeat_count items in the array, initializing them all to the value of \a item.
@@ -1423,7 +1449,7 @@ namespace mtb {
 
     /// Create \a push_count new items at the end and return them as a slice.
     template<typename T>
-    tSlice<T> PushN(tArray<T>& array, ptrdiff_t push_count, eInit init = kClearToZero) {
+    MTB_NODISCARD tSlice<T> PushN(tArray<T>& array, ptrdiff_t push_count, eInit init = kClearToZero) {
         tSlice<T> result{};
         if(Reserve(array, array.len + push_count)) {
             tSlice<T> Allocation = PtrSlice(array.ptr, array.cap);
@@ -1447,14 +1473,16 @@ namespace mtb {
 
     /// Create a new item in the array and return a pointer to it.
     template<typename T>
-    T* PushOne(tArray<T>& array, eInit init = kClearToZero) {
-        return PushN(array, 1, init).ptr;
+    MTB_NODISCARD T& PushOne(tArray<T>& array, eInit init = kClearToZero) {
+        T* result = PushN(array, 1, init).ptr;
+        MTB_ASSERT(!!result);
+        return *result;
     }
 
     /// Create a new item in the array and copy \a item there.
     template<typename T, typename TItem>
-    T* Push(tArray<T>& array, TItem item) {
-        return new(PushOne<T>(array, kNoInit)) T(item);
+    T& Push(tArray<T>& array, TItem item) {
+        return *new(&PushOne<T>(array, kNoInit)) T(item);
     }
 
     /// Create \a repeat_count items in the array, initializing them all to the value of \a item.
@@ -1503,7 +1531,7 @@ namespace mtb {
         MTB_ASSERT(false);
     }
 
-    tSlice<char> ToString(tArray<char>& array, bool null_terminate = true);
+    MTB_NODISCARD tSlice<char> ToString(tArray<char>& array, bool null_terminate = true);
 
 }  // namespace mtb
 
@@ -1533,16 +1561,16 @@ namespace mtb {
         T* Items;
         ptrdiff_t index;
 
-        bool operator!=(tMapIterator_KeyOrValue const& Other) const {
+        MTB_NODISCARD bool operator!=(tMapIterator_KeyOrValue const& Other) const {
             return index != Other.index;
         }
 
-        T& operator*() const {
+        MTB_NODISCARD T& operator*() const {
             MTB_ASSERT(index < cap);
             return Items[index];
         }
 
-        tMapIterator_KeyOrValue& operator++() {
+        MTB_NODISCARD tMapIterator_KeyOrValue& operator++() {
             while(++index < cap) {
                 if(Slots[index].State == tMapSlot::kOccupied) {
                     break;
@@ -1551,13 +1579,13 @@ namespace mtb {
             return *this;
         }
 
-        tMapIterator_KeyOrValue begin() {
+        MTB_NODISCARD tMapIterator_KeyOrValue begin() {
             tMapIterator_KeyOrValue result = *this;
             result.index = -1;
             return ++result;
         }
 
-        tMapIterator_KeyOrValue end() {
+        MTB_NODISCARD tMapIterator_KeyOrValue end() {
             tMapIterator_KeyOrValue result = *this;
             result.index = cap;
             return result;
@@ -1600,22 +1628,22 @@ namespace mtb {
 
 namespace mtb {
     template<typename K, typename V>
-    tMapIterator_KeyOrValue<K> IterKeys(tMap<K, V>& map);
+    MTB_NODISCARD tMapIterator_KeyOrValue<K> IterKeys(tMap<K, V>& map);
 
     template<typename K, typename V>
-    tMapIterator_KeyOrValue<V> IterValues(tMap<K, V>& map);
+    MTB_NODISCARD tMapIterator_KeyOrValue<V> IterValues(tMap<K, V>& map);
 
     template<typename K, typename V>
-    tMap<K, V> CreateMap(tAllocator allocator, tMapHashFunc HashFunc, tMapCompareFunc CompareFunc = nullptr);
+    MTB_NODISCARD tMap<K, V> CreateMap(tAllocator allocator, tMapHashFunc hash_func, tMapCompareFunc cmp_func);
 
     template<typename K, typename V>
     void Put(tMap<K, V>& map, K const& Key, V const& value);
 
     template<typename K, typename V>
-    V* Find(tMap<K, V>& map, K const& Key);
+    MTB_NODISCARD V* Find(tMap<K, V>& map, K const& Key);
 
     template<typename K, typename V>
-    V& FindChecked(tMap<K, V>& map, K const& Key);
+    MTB_NODISCARD V& FindChecked(tMap<K, V>& map, K const& Key);
 
     template<typename K, typename V>
     bool Remove(tMap<K, V>& map, K const& Key);
@@ -1723,13 +1751,12 @@ mtb::tMapIterator_KeyOrValue<V> mtb::IterValues(tMap<K, V>& map) {
 }
 
 template<typename K, typename V>
-mtb::tMap<K, V> mtb::CreateMap(tAllocator allocator, tMapHashFunc HashFunc, tMapCompareFunc CompareFunc) {
+mtb::tMap<K, V> mtb::CreateMap(tAllocator allocator, tMapHashFunc hash_func, tMapCompareFunc cmp_func) {
     MTB_ASSERT(allocator);
-    MTB_ASSERT(HashFunc);
-    if(!CompareFunc) {
-        CompareFunc = MTB_memcmp;
-    }
-    return {allocator, HashFunc, CompareFunc};
+    MTB_ASSERT(hash_func);
+    MTB_ASSERT(cmp_func);
+    tMap<K, V> result{allocator, hash_func, cmp_func};
+    return result;
 }
 
 template<typename K, typename V>
@@ -1782,8 +1809,9 @@ bool mtb::Remove(tMap<K, V>& map, K const& Key) {
         ptrdiff_t index = start_index;
         while(true) {
             tMapSlot& Slot = map.Slots[index];
-            if(Slot.State == tMapSlot::kFree)
+            if(Slot.State == tMapSlot::kFree) {
                 break;
+            }
 
             if(map.Slots[index].State == tMapSlot::kOccupied && map.CompareFunc(map.Keys + index, &Key, sizeof(K)) == 0) {
                 map.Slots[index].State = tMapSlot::kDead;
@@ -1793,10 +1821,12 @@ bool mtb::Remove(tMap<K, V>& map, K const& Key) {
                 break;
             }
 
-            if(++index == map.cap)
+            if(++index == map.cap) {
                 index = 0;
-            if(index == start_index)
+            }
+            if(index == start_index) {
                 break;
+            }
         }
     }
 
@@ -1806,6 +1836,11 @@ bool mtb::Remove(tMap<K, V>& map, K const& Key) {
 // --------------------------------------------------
 // -- #Section Delegate -----------------------------
 // --------------------------------------------------
+
+// #NOTE: Disabled for now because I'm not 100% sure what kind of behavior
+//  this particular implementation exhibits and I don't have proper use/test
+//  cases at hand.
+#if 0
 namespace mtb {
     template<typename>
     struct tDelegate;
@@ -1819,34 +1854,40 @@ namespace mtb {
         tDispatchSignature* DispatchProc{};
 
         template<typename tTargetSignature>
-        inline static R Dispatcher(void* DispatchTarget, tArgs&&... args) {
+        static R Dispatcher(void* DispatchTarget, tArgs&&... args) {
             return (*(tTargetSignature*)DispatchTarget)(ForwardCast<tArgs>(args)...);
         }
 
-        tDelegate() {}
+        tDelegate() = default;
+        tDelegate(tDelegate const&) = default;
+        tDelegate(tDelegate&&) = default;
+        tDelegate& operator=(tDelegate const&) = default;
+        tDelegate& operator=(tDelegate&&) = default;
+        ~tDelegate() = default;
 
-        tDelegate(tDelegateSignature* PlainProcPtr)
+        explicit tDelegate(tDelegateSignature* PlainProcPtr)
             : DispatchTarget{PlainProcPtr}
             , DispatchProc{Dispatcher<tDelegateSignature>} {
             MTB_ASSERT(PlainProcPtr);
         }
 
         template<typename T>
-        tDelegate(T&& CallableTarget)
+        explicit tDelegate(T&& CallableTarget)
             : DispatchTarget{&CallableTarget}
             , DispatchProc{Dispatcher<tDecay<T>>} {
         }
 
-        inline R operator()(tArgs&&... args) {
+        R operator()(tArgs&&... args) {
             MTB_ASSERT(DispatchProc && DispatchTarget);
             return DispatchProc(DispatchTarget, ForwardCast<tArgs>(args)...);
         }
 
-        inline constexpr explicit operator bool() const {
+        MTB_NODISCARD constexpr explicit operator bool() const {
             return !!DispatchTarget && !!DispatchProc;
         }
     };
 }  // namespace mtb
+#endif
 
 // --------------------------------------------------
 // -- #Section Sorting ------------------------------
@@ -1866,7 +1907,7 @@ namespace mtb {
     void QuickSort(void* user_ptr, ptrdiff_t count, bool (*less_proc)(void*, ptrdiff_t, ptrdiff_t), void (*swap_proc)(void*, ptrdiff_t, ptrdiff_t), ptrdiff_t threshold);
 
     template<typename T, typename tLessProc, typename tSwapProc>
-    inline void QuickSortSlice(tSlice<T> slice, tLessProc less_proc, tSwapProc swap_proc, ptrdiff_t threshold = 16) {
+    void QuickSortSlice(tSlice<T> slice, tLessProc less_proc, tSwapProc swap_proc, ptrdiff_t threshold = 16) {
         struct tContext {
             T* ptr;
             tLessProc Less;
@@ -1889,7 +1930,7 @@ namespace mtb {
     }
 
     template<typename T, typename tLessProc>
-    inline void QuickSortSlice(tSlice<T> slice, tLessProc less_proc, ptrdiff_t threshold = 16) {
+    void QuickSortSlice(tSlice<T> slice, tLessProc less_proc, ptrdiff_t threshold = 16) {
         struct tContext {
             T* ptr;
             tLessProc Less;
@@ -1911,7 +1952,7 @@ namespace mtb {
     }
 
     template<typename T>
-    inline void QuickSortSlice(tSlice<T> slice, ptrdiff_t threshold = 16) {
+    void QuickSortSlice(tSlice<T> slice, ptrdiff_t threshold = 16) {
         QuickSort(
             slice.ptr,
             slice.len,
@@ -1934,7 +1975,7 @@ namespace mtb {
 // --------------------------------------------------
 // -- #Section Option -------------------------------
 // --------------------------------------------------
-#define MTB_OPTION_MOVE_SEMANTICS 0
+#define MTB_OPTION_MOVE_SEMANTICS 1
 
 namespace mtb {
     template<typename T>
@@ -1945,22 +1986,24 @@ namespace mtb {
             T value;
         };
 
-        inline tOption()
-            : has_value{false} {}
+        // ReSharper disable once CppPossiblyUninitializedMember
+        tOption()
+            : has_value{false} {
+        }
 
-        inline tOption(T in_value)
+        tOption(T in_value)
             : has_value{true} {
             new(&value) T(MoveCast(in_value));
         }
 
 #if MTB_OPTION_MOVE_SEMANTICS
-        inline tOption(T&& in_value)
+        tOption(T&& in_value)
             : has_value{true} {
             new(&value) T(MoveCast(in_value));
         }
 #endif
 
-        inline tOption(tOption const& to_copy)
+        tOption(tOption const& to_copy)
             : has_value{to_copy.has_value} {
             if(to_copy.has_value) {
                 new(&value) T(to_copy.value);
@@ -1968,7 +2011,7 @@ namespace mtb {
         }
 
 #if MTB_OPTION_MOVE_SEMANTICS
-        inline tOption(tOption&& to_move)
+        tOption(tOption&& to_move)
             : has_value{to_move.has_value} {
             if(to_move.has_value) {
                 new(&value) T(MoveCast(to_move.value));
@@ -1976,7 +2019,7 @@ namespace mtb {
         }
 #endif
 
-        inline ~tOption() {
+        ~tOption() {
             if(has_value) {
                 value.~T();
             }
@@ -2028,19 +2071,19 @@ namespace mtb {
 
         constexpr operator bool() const { return has_value; }
 
-        T& Unwrap() {
+        MTB_NODISCARD T& Unwrap() {
             MTB_ASSERT(has_value);
             return value;
         }
     };
 
     template<typename T>
-    constexpr bool operator==(tOption<T> const& a, tOption<T> const& b) {
+    MTB_NODISCARD constexpr bool operator==(tOption<T> const& a, tOption<T> const& b) {
         return (!a.has_value && !b.has_value) || (a.has_value && b.has_value && a.value == b.value);
     }
 
     template<typename T>
-    constexpr bool operator!=(tOption<T> const& a, tOption<T> const& b) {
+    MTB_NODISCARD constexpr bool operator!=(tOption<T> const& a, tOption<T> const& b) {
         return !(a == b);
     }
 }  // namespace mtb
@@ -2055,20 +2098,20 @@ namespace mtb {
 #define MTB_ARENA_DEFAULT_BUCKET_SIZE 4096
 #endif
 
-namespace mtb::arena {
-    struct tBucket {
-        tBucket* next;
-        tBucket* prev;
+namespace mtb {
+    struct tArenaBucket {
+        tArenaBucket* next;
+        tArenaBucket* prev;
         size_t used_size;
         size_t total_size;
         uint8_t data[1];  // trailing data
     };
 
     struct tArenaMarker {
-        tBucket* bucket;
+        tArenaBucket* bucket;
         size_t offset;
 
-        inline constexpr uint8_t* ptr() {
+        MTB_NODISCARD constexpr uint8_t* ptr() const {
             return bucket ? bucket->data + offset : nullptr;
         }
     };
@@ -2078,15 +2121,15 @@ namespace mtb::arena {
     struct tArena {
         tAllocator child_allocator;
         size_t min_bucket_size;
-        tBucket* current_bucket;
-        tBucket* first_free_bucket;
+        tArenaBucket* current_bucket;
+        tArenaBucket* first_free_bucket;
 
         size_t largest_bucket_size;
     };
 
-    size_t BucketTotalSize(tBucket* bucket);
+    MTB_NODISCARD size_t BucketTotalSize(tArenaBucket const* bucket);
 
-    size_t BucketUsedSize(tBucket* bucket);
+    MTB_NODISCARD size_t BucketUsedSize(tArenaBucket const* bucket);
 
     void Reserve(tArena& arena, size_t total_size);
 
@@ -2096,11 +2139,11 @@ namespace mtb::arena {
 
     void* ReallocRaw(tArena& arena, void* old_ptr, size_t old_size, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init);
 
-    void* PushRaw(tArena& arena, size_t size, size_t alignment, eInit init);
+    MTB_NODISCARD void* PushRaw(tArena& arena, size_t size, size_t alignment, eInit init);
 
     tSlice<void> ReallocRawArray(tArena& arena, tSlice<void> old_array, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init);
 
-    tSlice<void> PushRawArray(tArena& arena, size_t size, size_t alignment, eInit init);
+    MTB_NODISCARD tSlice<void> PushRawArray(tArena& arena, size_t size, size_t alignment, eInit init);
 
     template<typename T>
     tSlice<T> ReallocArray(tArena& arena, tSlice<T> old_array, size_t new_count, eInit init = kClearToZero) {
@@ -2115,12 +2158,12 @@ namespace mtb::arena {
     }
 
     template<typename T>
-    tSlice<T> PushArray(tArena& arena, size_t count, eInit init = kClearToZero) {
+    MTB_NODISCARD tSlice<T> PushArray(tArena& arena, size_t count, eInit init = kClearToZero) {
         return ReallocArray<T>(arena, {}, count, init);
     }
 
     template<typename T, typename U = tRemoveConst<T>>
-    tSlice<U> PushCopyArray(tArena& arena, tSlice<T> to_copy) {
+    MTB_NODISCARD tSlice<U> PushCopyArray(tArena& arena, tSlice<T> to_copy) {
         tSlice<U> Copy = PushArray<U>(arena, to_copy.len, kNoInit);
         SliceCopyBytes(Copy, to_copy);
         return Copy;
@@ -2128,7 +2171,7 @@ namespace mtb::arena {
 
     // The same as PushCopyArray with one additional zero-element at the end.
     template<typename T, typename U = tRemoveConst<T>>
-    tSlice<U> PushCopyString(tArena& arena, tSlice<T> to_copy) {
+    MTB_NODISCARD tSlice<U> PushCopyString(tArena& arena, tSlice<T> to_copy) {
         tSlice<U> ZeroTerminatedCopy = PushArray<U>(arena, to_copy.len + 1, kNoInit);
         tSlice<U> result = SliceRange(ZeroTerminatedCopy, 0, ZeroTerminatedCopy.len - 1);
         SliceCopyBytes(result, to_copy);
@@ -2138,14 +2181,16 @@ namespace mtb::arena {
     }
 
     template<typename T>
-    T* PushOne(tArena& arena, eInit init = kClearToZero) {
-        return PushArray<T>(arena, 1, init).ptr;
+    MTB_NODISCARD T& PushOne(tArena& arena, eInit init = kClearToZero) {
+        T* result = PushArray<T>(arena, 1, init).ptr;
+        MTB_ASSERT(!!result);
+        return *result;
     }
 
     template<typename T>
-    T* PushCopy(tArena& arena, T const& item) {
-        T* result = PushOne<T>(arena, kNoInit);
-        SliceCopyBytes(PtrSlice(result, 1), PtrSlice(&item, 1));
+    MTB_NODISCARD T& PushCopy(tArena& arena, T const& item) {
+        T& result = PushOne<T>(arena, kNoInit);
+        SliceCopyBytes(PtrSlice(&result, 1), PtrSlice(&item, 1));
         return result;
     }
 
@@ -2156,14 +2201,15 @@ namespace mtb::arena {
     */
 
     /// \remark Only valid before free was called.
-    tArenaMarker GetMarker(tArena& arena);
+    MTB_NODISCARD tArenaMarker GetMarker(tArena const& arena);
+
     void ResetToMarker(tArena& arena, tArenaMarker marker, bool release_memory = true);
 
     /// Ensure the memory in the given range is contiguous.
     /// Returns the marker to the beginning of the linearized section.
-    tSlice<void> Linearize(tArena& arena, tArenaMarker begin, tArenaMarker end);
+    MTB_NODISCARD tSlice<void> Linearize(tArena& arena, tArenaMarker begin, tArenaMarker end);
 
-    tAllocator MakeAllocator(tArena& arena);
+    MTB_NODISCARD tAllocator MakeAllocator(tArena& arena);
 
 #if MTB_USE_STB_SPRINTF
     /// \brief Produce several fragments of formatted strings within the given arena. Use `*printf_Arena` or `Linearize` to produce an actual string.
@@ -2193,148 +2239,144 @@ namespace mtb::arena {
 
 #endif  // MTB_USE_STB_SPRINTF
 
-}  // namespace mtb::arena
+}  // namespace mtb
 
 // --------------------------------------------------
 // -- #Section Strings ------------------------------
 // --------------------------------------------------
-namespace mtb::string {
-    // #TODO I want UTF-8 support :(
+namespace mtb {
 
+    //
+    // Types
+    //
     enum eStringComparison {
         kCaseSensitive,
         kIgnoreCase,
     };
 
-    // #TODO
-    // struct tString {
-    //     union {
-    //         struct {
-    //             uint8_t const* ptr;
-    //             ptrdiff_t len;
-    //         };
-    //         tSlice<uint8_t const> data;
-    //     };
-    // };
-
-    // #TODO
-    // struct tStringBuilder {
-    //     tArray<uint8_t> buf;
-    // };
-    // tStringBuilder StringBuilder(tAllocator a);
-
-    char ToLowerChar(char c);
-    char ToUpperChar(char c);
-
-    bool IsDigitChar(char c);
-    bool IsWhiteChar(char c);
-
-    int32_t StringCompare(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp = kCaseSensitive);
-
-    bool StringEquals(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp = kCaseSensitive);
-
-    bool StringStartsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp = kCaseSensitive);
-
-    bool StringEndsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp = kCaseSensitive);
-
     using tTrimPredicate = bool (*)(char);
-
-    tSlice<char const> StringTrimStartPredicate(tSlice<char const> str, tTrimPredicate Predicate);
-
-    inline tSlice<char> StringTrimStartPredicate(tSlice<char> str, tTrimPredicate Predicate) { return SliceRemoveConst(StringTrimStartPredicate((tSlice<char const>)str, Predicate)); }
-
-    tSlice<char const> StringTrimEndPredicate(tSlice<char const> str, tTrimPredicate Predicate);
-
-    inline tSlice<char> StringTrimEndPredicate(tSlice<char> str, tTrimPredicate Predicate) { return SliceRemoveConst(StringTrimEndPredicate((tSlice<char const>)str, Predicate)); }
-
-    tSlice<char const> StringTrimPredicate(tSlice<char const> str, tTrimPredicate Predicate);
-
-    inline tSlice<char> StringTrimPredicate(tSlice<char> str, tTrimPredicate Predicate) { return SliceRemoveConst(StringTrimPredicate((tSlice<char const>)str, Predicate)); }
-
-    tSlice<char const> StringTrimStart(tSlice<char const> str);
-
-    inline tSlice<char> StringTrimStart(tSlice<char> str) { return SliceRemoveConst(StringTrimStart((tSlice<char const>)str)); }
-
-    tSlice<char const> StringTrimEnd(tSlice<char const> str);
-
-    inline tSlice<char> StringTrimEnd(tSlice<char> str) { return SliceRemoveConst(StringTrimEnd((tSlice<char const>)str)); }
-
-    tSlice<char const> StringTrim(tSlice<char const> str);
-
-    inline tSlice<char> StringTrim(tSlice<char> str) { return SliceRemoveConst(StringTrim((tSlice<char const>)str)); }
-
-    tSlice<char> AllocString(tAllocator a, size_t char_count);
-    tSlice<char> DupeString(tAllocator a, tSlice<char const> str);
-    void FreeString(tAllocator a, tSlice<char> str);
-
-    //
-    // Wide char overloads
-    //
-    // #TODO Drop support for this and instead require the user code to
-    //       convert from wide strings to narrow strings first if they
-    //       want to use our functionality.
-
-    wchar_t ToLowerChar(wchar_t c);
-    wchar_t ToUpperChar(wchar_t c);
-
-    bool IsDigitChar(wchar_t c);
-    bool IsWhiteChar(wchar_t c);
-
-    int32_t StringCompare(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp = kCaseSensitive);
-
-    bool StringEquals(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp = kCaseSensitive);
-
-    bool StringStartsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp = kCaseSensitive);
-
-    bool StringEndsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp = kCaseSensitive);
-
     using tWTrimPredicate = bool (*)(wchar_t);
 
-    tSlice<wchar_t const> StringTrimStartPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
+    MTB_NODISCARD size_t StringLengthZ(char const* str_z);
+    MTB_NODISCARD size_t StringLengthZ(wchar_t const* str_z);
 
-    inline tSlice<wchar_t> StringTrimStartPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimStartPredicate((tSlice<wchar_t const>)str, Predicate)); }
+    MTB_NODISCARD inline tSlice<char> WrapZ(char* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
+    MTB_NODISCARD inline tSlice<wchar_t> WrapZ(wchar_t* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
 
-    tSlice<wchar_t const> StringTrimEndPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
+    MTB_NODISCARD inline tSlice<char const> ConstZ(char const* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
 
-    inline tSlice<wchar_t> StringTrimEndPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimEndPredicate((tSlice<wchar_t const>)str, Predicate)); }
-
-    tSlice<wchar_t const> StringTrimPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
-
-    inline tSlice<wchar_t> StringTrimPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimPredicate((tSlice<wchar_t const>)str, Predicate)); }
-
-    tSlice<wchar_t const> StringTrimStart(tSlice<wchar_t const> str);
-
-    inline tSlice<wchar_t> StringTrimStart(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrimStart((tSlice<wchar_t const>)str)); }
-
-    tSlice<wchar_t const> StringTrimEnd(tSlice<wchar_t const> str);
-
-    inline tSlice<wchar_t> StringTrimEnd(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrimEnd((tSlice<wchar_t const>)str)); }
-
-    tSlice<wchar_t const> StringTrim(tSlice<wchar_t const> str);
-
-    inline tSlice<wchar_t> StringTrim(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrim((tSlice<wchar_t const>)str)); }
-
-    tSlice<wchar_t> AllocWString(tAllocator a, size_t char_count);
-    tSlice<wchar_t> DupeString(tAllocator a, tSlice<wchar_t const> str);
-    void FreeWString(tAllocator a, tSlice<wchar_t> str);
+    MTB_NODISCARD inline tSlice<wchar_t const> ConstZ(wchar_t const* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
 
     //
-    // C-str interop (char)
+    // Character conversion
     //
-    size_t StringLengthZ(char const* str_z);
 
-    inline tSlice<char> WrapZ(char* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
+    MTB_NODISCARD char ToLowerChar(char c);
+    MTB_NODISCARD char ToUpperChar(char c);
 
-    inline tSlice<char const> ConstZ(char const* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
+    MTB_NODISCARD wchar_t ToLowerChar(wchar_t c);
+    MTB_NODISCARD wchar_t ToUpperChar(wchar_t c);
 
     //
-    // C-str interop (wchar_t)
+    // Character properties
     //
-    size_t StringLengthZ(wchar_t const* str_z);
 
-    inline tSlice<wchar_t> WrapZ(wchar_t* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
+    MTB_NODISCARD bool IsDigitChar(char c);
+    MTB_NODISCARD bool IsWhiteChar(char c);
 
-    inline tSlice<wchar_t const> ConstZ(wchar_t const* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
+    MTB_NODISCARD bool IsDigitChar(wchar_t c);
+    MTB_NODISCARD bool IsWhiteChar(wchar_t c);
+
+    // String comparison
+
+    MTB_NODISCARD int32_t StringCompare(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp = kCaseSensitive);
+
+    MTB_NODISCARD int32_t StringCompare(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp = kCaseSensitive);
+
+    MTB_NODISCARD bool StringsAreEqual(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp = kCaseSensitive);
+
+    MTB_NODISCARD bool StringsAreEqual(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp = kCaseSensitive);
+
+    MTB_NODISCARD bool StringStartsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp = kCaseSensitive);
+
+    MTB_NODISCARD bool StringStartsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp = kCaseSensitive);
+
+    MTB_NODISCARD bool StringEndsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp = kCaseSensitive);
+
+    MTB_NODISCARD bool StringEndsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp = kCaseSensitive);
+
+    //
+    // Trim Start
+    //
+
+    MTB_NODISCARD tSlice<char const> StringTrimStartPredicate(tSlice<char const> str, tTrimPredicate Predicate);
+
+    MTB_NODISCARD inline tSlice<char> StringTrimStartPredicate(tSlice<char> str, tTrimPredicate Predicate) { return SliceRemoveConst(StringTrimStartPredicate((tSlice<char const>)str, Predicate)); }
+
+    MTB_NODISCARD tSlice<char const> StringTrimStart(tSlice<char const> str);
+
+    MTB_NODISCARD inline tSlice<char> StringTrimStart(tSlice<char> str) { return SliceRemoveConst(StringTrimStart((tSlice<char const>)str)); }
+
+    //
+    // Trim End
+    //
+
+    MTB_NODISCARD tSlice<char const> StringTrimEndPredicate(tSlice<char const> str, tTrimPredicate Predicate);
+
+    MTB_NODISCARD inline tSlice<char> StringTrimEndPredicate(tSlice<char> str, tTrimPredicate Predicate) { return SliceRemoveConst(StringTrimEndPredicate((tSlice<char const>)str, Predicate)); }
+
+    MTB_NODISCARD tSlice<char const> StringTrimEnd(tSlice<char const> str);
+
+    MTB_NODISCARD inline tSlice<char> StringTrimEnd(tSlice<char> str) { return SliceRemoveConst(StringTrimEnd((tSlice<char const>)str)); }
+
+    //
+    // Trim (both ends)
+    //
+
+    MTB_NODISCARD tSlice<char const> StringTrimPredicate(tSlice<char const> str, tTrimPredicate Predicate);
+
+    MTB_NODISCARD inline tSlice<char> StringTrimPredicate(tSlice<char> str, tTrimPredicate Predicate) { return SliceRemoveConst(StringTrimPredicate((tSlice<char const>)str, Predicate)); }
+
+    MTB_NODISCARD tSlice<char const> StringTrim(tSlice<char const> str);
+
+    MTB_NODISCARD inline tSlice<char> StringTrim(tSlice<char> str) { return SliceRemoveConst(StringTrim((tSlice<char const>)str)); }
+
+    MTB_NODISCARD tSlice<wchar_t const> StringTrimStartPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
+
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrimStartPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimStartPredicate((tSlice<wchar_t const>)str, Predicate)); }
+
+    MTB_NODISCARD tSlice<wchar_t const> StringTrimEndPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
+
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrimEndPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimEndPredicate((tSlice<wchar_t const>)str, Predicate)); }
+
+    MTB_NODISCARD tSlice<wchar_t const> StringTrimPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
+
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrimPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimPredicate((tSlice<wchar_t const>)str, Predicate)); }
+
+    MTB_NODISCARD tSlice<wchar_t const> StringTrimStart(tSlice<wchar_t const> str);
+
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrimStart(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrimStart((tSlice<wchar_t const>)str)); }
+
+    MTB_NODISCARD tSlice<wchar_t const> StringTrimEnd(tSlice<wchar_t const> str);
+
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrimEnd(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrimEnd((tSlice<wchar_t const>)str)); }
+
+    MTB_NODISCARD tSlice<wchar_t const> StringTrim(tSlice<wchar_t const> str);
+
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrim(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrim((tSlice<wchar_t const>)str)); }
+
+    //
+    // String Allocation
+    //
+
+    MTB_NODISCARD tSlice<char> AllocString(tAllocator a, size_t char_count);
+    MTB_NODISCARD tSlice<wchar_t> AllocWString(tAllocator a, size_t char_count);
+
+    MTB_NODISCARD tSlice<char> DupeString(tAllocator a, tSlice<char const> str);
+    MTB_NODISCARD tSlice<wchar_t> DupeString(tAllocator a, tSlice<wchar_t const> str);
+
+    void FreeString(tAllocator a, tSlice<char> str);
+    void FreeString(tAllocator a, tSlice<wchar_t> str);
 }  // namespace mtb::string
 
 // --------------------------------------------------
@@ -2367,9 +2409,9 @@ namespace mtb {
     /// Break a value into whole unit components.
     /// \example
     ///    uint64_t byte_value = (1337 * mebibytes_to_bytes) + (666 * kibibytes_to_bytes) + 42;
-    ///    uint64_t Units[]{mebibytes_to_bytes, kibibytes_to_bytes, 1}; uint32_t Results[3];
-    ///    BreakIntoUnits(byte_value, ArraySlice(Units), ArraySlice(Results));
-    ///    // Results[0] == 1337; Results[1] == 666; Results[0] == 42;
+    ///    uint64_t units[]{mebibytes_to_bytes, kibibytes_to_bytes, 1}; uint32_t results[3];
+    ///    BreakIntoUnits(byte_value, ArraySlice(units), ArraySlice(results));
+    ///    // results[0] == 1337; results[1] == 666; results[0] == 42;
     void BreakIntoUnits(uint64_t value, tSlice<uint64_t const> units_table, tSlice<uint32_t> out_results);
 }  // namespace mtb
 
@@ -2381,7 +2423,27 @@ namespace mtb::time {
     struct tTimespan {
         int64_t nanoseconds;
 
-        inline constexpr operator bool() const { return (bool)nanoseconds; }
+        constexpr operator bool() const { return (bool)nanoseconds; }
+
+        // clang-format off
+        MTB_NODISCARD constexpr int64_t Nanoseconds() const { return nanoseconds; }
+        MTB_NODISCARD constexpr double Microseconds() const { return (double)nanoseconds / (double)microseconds_to_nanoseconds; }
+        MTB_NODISCARD constexpr double Milliseconds() const { return (double)nanoseconds / (double)milliseconds_to_nanoseconds; }
+        MTB_NODISCARD constexpr double Seconds()      const { return (double)nanoseconds / (double)seconds_to_nanoseconds; }
+        MTB_NODISCARD constexpr double Minutes()      const { return (double)nanoseconds / (double)minutes_to_nanoseconds; }
+        MTB_NODISCARD constexpr double Hours()        const { return (double)nanoseconds / (double)hours_to_nanoseconds; }
+        MTB_NODISCARD constexpr double Days()         const { return (double)nanoseconds / (double)days_to_nanoseconds; }
+        // clang-format on
+
+        // clang-format off
+        MTB_NODISCARD static constexpr tTimespan FromNanoseconds(int64_t in_nanoseconds)  { return { in_nanoseconds }; }
+        MTB_NODISCARD static constexpr tTimespan FromMicroseconds(double in_microseconds) { return { (int64_t)(in_microseconds * (double)microseconds_to_nanoseconds) }; }
+        MTB_NODISCARD static constexpr tTimespan FromMilliseconds(double in_milliseconds) { return { (int64_t)(in_milliseconds * (double)milliseconds_to_nanoseconds) }; }
+        MTB_NODISCARD static constexpr tTimespan FromSeconds     (double in_seconds)      { return { (int64_t)(in_seconds      * (double)seconds_to_nanoseconds) }; }
+        MTB_NODISCARD static constexpr tTimespan FromMinutes     (double in_minutes)      { return { (int64_t)(in_minutes      * (double)minutes_to_nanoseconds) }; }
+        MTB_NODISCARD static constexpr tTimespan FromHours       (double in_hours)        { return { (int64_t)(in_hours        * (double)hours_to_nanoseconds) }; }
+        MTB_NODISCARD static constexpr tTimespan FromDays        (double in_days)         { return { (int64_t)(in_days         * (double)days_to_nanoseconds) }; }
+        // clang-format on
     };
 
     constexpr tTimespan timespan_zero{0};
@@ -2391,11 +2453,11 @@ namespace mtb::time {
     //
     // timespan + timespan
     //
-    inline constexpr tTimespan operator+(tTimespan a, tTimespan b) {
+    MTB_NODISCARD constexpr tTimespan operator+(tTimespan a, tTimespan b) {
         return {a.nanoseconds + b.nanoseconds};
     }
 
-    inline constexpr tTimespan& operator+=(tTimespan& a, tTimespan b) {
+    MTB_NODISCARD constexpr tTimespan& operator+=(tTimespan& a, tTimespan b) {
         a.nanoseconds += b.nanoseconds;
         return a;
     }
@@ -2403,15 +2465,15 @@ namespace mtb::time {
     //
     // (timespan) - timespan
     //
-    inline constexpr tTimespan operator-(tTimespan a) {
+    MTB_NODISCARD constexpr tTimespan operator-(tTimespan a) {
         return {-a.nanoseconds};
     }
 
-    inline constexpr tTimespan operator-(tTimespan a, tTimespan b) {
+    MTB_NODISCARD constexpr tTimespan operator-(tTimespan a, tTimespan b) {
         return {a.nanoseconds - b.nanoseconds};
     }
 
-    inline constexpr tTimespan& operator-=(tTimespan& a, tTimespan b) {
+    MTB_NODISCARD constexpr tTimespan& operator-=(tTimespan& a, tTimespan b) {
         a.nanoseconds -= b.nanoseconds;
         return a;
     }
@@ -2419,51 +2481,29 @@ namespace mtb::time {
     //
     // timespan comparison
     //
-    inline constexpr bool operator==(tTimespan a, tTimespan b) {
+    MTB_NODISCARD constexpr bool operator==(tTimespan a, tTimespan b) {
         return a.nanoseconds == b.nanoseconds;
     }
 
-    inline constexpr bool operator!=(tTimespan a, tTimespan b) {
+    MTB_NODISCARD constexpr bool operator!=(tTimespan a, tTimespan b) {
         return a.nanoseconds != b.nanoseconds;
     }
 
-    inline constexpr bool operator<(tTimespan a, tTimespan b) {
+    MTB_NODISCARD constexpr bool operator<(tTimespan a, tTimespan b) {
         return a.nanoseconds < b.nanoseconds;
     }
 
-    inline constexpr bool operator<=(tTimespan a, tTimespan b) {
+    MTB_NODISCARD constexpr bool operator<=(tTimespan a, tTimespan b) {
         return a.nanoseconds <= b.nanoseconds;
     }
 
-    inline constexpr bool operator>(tTimespan a, tTimespan b) {
+    MTB_NODISCARD constexpr bool operator>(tTimespan a, tTimespan b) {
         return a.nanoseconds > b.nanoseconds;
     }
 
-    inline constexpr bool operator>=(tTimespan a, tTimespan b) {
+    MTB_NODISCARD constexpr bool operator>=(tTimespan a, tTimespan b) {
         return a.nanoseconds >= b.nanoseconds;
     }
-
-    // clang-format off
-    inline constexpr int64_t GetNanoseconds(tTimespan timespan) { return timespan.nanoseconds; }
-    inline constexpr double GetMicroseconds(tTimespan timespan) { return (double)timespan.nanoseconds / (double)microseconds_to_nanoseconds; }
-    inline constexpr double GetMilliseconds(tTimespan timespan) { return (double)timespan.nanoseconds / (double)milliseconds_to_nanoseconds; }
-    inline constexpr double GetSeconds(tTimespan timespan)      { return (double)timespan.nanoseconds / (double)seconds_to_nanoseconds; }
-    inline constexpr double GetMinutes(tTimespan timespan)      { return (double)timespan.nanoseconds / (double)minutes_to_nanoseconds; }
-    inline constexpr double GetHours(tTimespan timespan)        { return (double)timespan.nanoseconds / (double)hours_to_nanoseconds; }
-    inline constexpr double GetDays(tTimespan timespan)         { return (double)timespan.nanoseconds / (double)days_to_nanoseconds; }
-
-    // clang-format on
-
-    // clang-format off
-    inline constexpr tTimespan FromNanoseconds(int64_t in_nanoseconds)  { return { in_nanoseconds }; }
-    inline constexpr tTimespan FromMicroseconds(double in_microseconds) { return { (int64_t)(in_microseconds * (double)microseconds_to_nanoseconds) }; }
-    inline constexpr tTimespan FromMilliseconds(double in_milliseconds) { return { (int64_t)(in_milliseconds * (double)milliseconds_to_nanoseconds) }; }
-    inline constexpr tTimespan FromSeconds     (double in_seconds)      { return { (int64_t)(in_seconds      * (double)seconds_to_nanoseconds) }; }
-    inline constexpr tTimespan FromMinutes     (double in_minutes)      { return { (int64_t)(in_minutes      * (double)minutes_to_nanoseconds) }; }
-    inline constexpr tTimespan FromHours       (double in_hours)        { return { (int64_t)(in_hours        * (double)hours_to_nanoseconds) }; }
-    inline constexpr tTimespan FromDays        (double in_days)         { return { (int64_t)(in_days         * (double)days_to_nanoseconds) }; }
-
-    // clang-format on
 
     struct tClockTime {
         bool negative;
@@ -2476,10 +2516,10 @@ namespace mtb::time {
         uint32_t nanoseconds;
     };
 
-    tClockTime ClockTimeFromTimespan(tTimespan span);
+    MTB_NODISCARD tClockTime ClockTimeFromTimespan(tTimespan span);
 }  // namespace mtb::time
 
-#endif  // !defined(MTB__INCLUDED)
+#endif  // !defined(MTB_INCLUDED)
 
 // --------------------------------------------------
 // -- #Section Implementation -----------------------
@@ -2549,7 +2589,7 @@ int mtb::CompareBytes(void const* a, void const* b, size_t size) {
 int mtb::SliceCompareBytes(tSlice<void const> a, tSlice<void const> b) {
     int result = (int)(a.len - b.len);
     if(result == 0) {
-        result = MTB_memcmp(a.ptr, b.ptr, SliceSize(a));
+        result = MTB_memcmp(a.ptr, b.ptr, a.len);
     }
     return result;
 }
@@ -2563,7 +2603,7 @@ void mtb::AlignAllocation(void** inout_ptr, size_t* inout_size, size_t alignment
     MTB_ASSERT(*inout_ptr != nullptr);
     MTB_ASSERT(alignment > 0);
 
-    uintptr_t unaligned = (uintptr_t)*inout_ptr;
+    auto unaligned = (uintptr_t)*inout_ptr;
 
     /* Example
         unaligned =      0b1010'1010 // input pointer
@@ -2577,9 +2617,10 @@ void mtb::AlignAllocation(void** inout_ptr, size_t* inout_size, size_t alignment
     */
     size_t a = alignment - 1;
     uintptr_t aligned = (unaligned + a) & ~a;
-    *inout_ptr = (void*)aligned;
+    uintptr_t delta = aligned - unaligned;
+    *(uint8_t*)inout_ptr += delta;
     if(inout_size) {
-        *inout_size += aligned - unaligned;
+        *inout_size += delta;
     }
 }
 
@@ -2619,6 +2660,7 @@ void mtb::tAllocator::FreeRaw(tSlice<void> mem, size_t alignment) const {
 
 #if MTB_USE_LIBC
 namespace mtb::impl {
+    // ReSharper disable once CppParameterMayBeConstPtrOrRef
     tSlice<void> LibcReallocProc(void* user, tSlice<void> old_mem, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) {
         (void)user;
         MTB_ASSERT((!old_mem || old_alignment >= new_alignment) && "Changing alignment is not supported on realloc (yet?)");
@@ -2671,7 +2713,7 @@ namespace mtb::impl {
                 void* aligned_ptr = old_mem.ptr;
                 size_t required_usize = new_size;
                 AlignAllocation(&aligned_ptr, &required_usize, new_alignment);
-                ptrdiff_t required_size = IntCast<ptrdiff_t>(required_usize);
+                auto required_size = IntCast<ptrdiff_t>(required_usize);
                 if(required_size > old_mem.len) {
                     // Grow existing allocation if possible
                     ptrdiff_t delta = required_size - old_mem.len;
@@ -2692,7 +2734,7 @@ namespace mtb::impl {
                 void* aligned_ptr = PtrOffset(allocator.buf.ptr, allocator.fill);
                 size_t required_usize = new_size;
                 AlignAllocation(&aligned_ptr, &required_usize, new_alignment);
-                ptrdiff_t required_size = IntCast<ptrdiff_t>(required_usize);
+                auto required_size = IntCast<ptrdiff_t>(required_usize);
                 if(allocator.fill + required_size <= allocator.buf.len) {
                     result = PtrSlice(aligned_ptr, new_size);
                     allocator.fill += required_size;
@@ -2717,15 +2759,17 @@ mtb::tAllocator mtb::tBufferAllocator::Allocator() {
 namespace mtb::impl {
     char* InternalPrintfCallback(char const* buf, void* user, int len) {
         PushMany(*(tArray<char>*)user, PtrSlice(buf, len));
-        return (char*)buf;
+        return const_cast<char*>(buf);
     }
 }  // namespace mtb::impl
 
 mtb::tSlice<char> mtb::vprintfAlloc(tAllocator a, char const* format, va_list vargs) {
-    tArray<char> buffer{a};
+    tArray<char> buffer{
+        .allocator = a,
+    };
     char temp_buffer[STB_SPRINTF_MIN];
     stbsp_vsprintfcb(impl::InternalPrintfCallback, &buffer, temp_buffer, format, vargs);
-    *PushOne<char>(buffer, kNoInit) = 0;
+    PushOne<char>(buffer, kNoInit) = 0;
     tSlice<char> result = ShrinkAllocation(buffer);
     if(result.len > 0) {
         result.len -= 1;
@@ -2772,7 +2816,7 @@ void mtb::QuickSort(void* user_ptr, ptrdiff_t count, bool (*less_proc)(void*, pt
     struct
     {
         ptrdiff_t left, right;
-    } stack[sizeof(ptrdiff_t) > 4 && sizeof(count) > 4 ? 48 : 32];
+    } stack[sizeof(count) > 4 ? 48 : 32];
 
     while(true) {
         if(right - left + 1 >= threshold) {
@@ -2864,8 +2908,8 @@ void mtb::QuickSort(void* user_ptr, ptrdiff_t count, bool (*less_proc)(void*, pt
     }
 }
 
-namespace mtb::arena {
-    void InternalInsertNextBucket(tBucket*& current_bucket, tBucket* new_bucket) {
+namespace mtb {
+    void InternalInsertNextBucket(tArenaBucket*& current_bucket, tArenaBucket* new_bucket) {
         if(current_bucket) {
             new_bucket->prev = current_bucket;
             new_bucket->next = current_bucket->next;
@@ -2876,10 +2920,10 @@ namespace mtb::arena {
         current_bucket = new_bucket;
     }
 
-    tBucket* InternalUnlinkBucket(tBucket*& current_bucket) {
+    tArenaBucket* InternalUnlinkBucket(tArenaBucket*& current_bucket) {
         MTB_ASSERT(current_bucket != nullptr);
 
-        tBucket* result = current_bucket;
+        tArenaBucket* result = current_bucket;
         if(current_bucket == current_bucket->prev) {
             current_bucket = nullptr;
         } else {
@@ -2891,7 +2935,7 @@ namespace mtb::arena {
         return result;
     }
 
-    uint8_t* InternalBucketAlloc(tBucket* bucket, size_t* inout_size, size_t alignment) {
+    uint8_t* InternalBucketAlloc(tArenaBucket* bucket, size_t* inout_size, size_t alignment) {
         uint8_t* result = nullptr;
         if(bucket && inout_size) {
             result = bucket->data + bucket->used_size;
@@ -2929,23 +2973,23 @@ namespace mtb::arena {
     }
 
     tSlice<void> InternalArenaAllocatorProc(void* user, tSlice<void> old_mem, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) {
-        tArena* arena = (tArena*)user;
+        auto* arena = (tArena*)user;
         MTB_ASSERT(arena);
         void* new_ptr = ReallocRaw(*arena, old_mem.ptr, old_mem.len, old_alignment, new_size, new_alignment, init);
         tSlice<void> result = PtrSlice(new_ptr, new_size);
         return result;
     }
-}  // namespace mtb::arena
+}  // namespace mtb
 
-size_t mtb::arena::BucketTotalSize(tBucket* bucket) {
+size_t mtb::BucketTotalSize(tArenaBucket const* bucket) {
     return bucket ? bucket->total_size : 0;
 }
 
-size_t mtb::arena::BucketUsedSize(tBucket* bucket) {
+size_t mtb::BucketUsedSize(tArenaBucket const* bucket) {
     return bucket ? bucket->used_size : 0;
 }
 
-void mtb::arena::Grow(tArena& arena, size_t required_size) {
+void mtb::Grow(tArena& arena, size_t required_size) {
     if(arena.min_bucket_size == 0) {
         arena.min_bucket_size = MTB_ARENA_DEFAULT_BUCKET_SIZE;
     }
@@ -2960,7 +3004,7 @@ void mtb::arena::Grow(tArena& arena, size_t required_size) {
 
     tAllocator allocator = arena.child_allocator;
     if(allocator) {
-        tBucket* new_bucket = (tBucket*)allocator.AllocRaw(sizeof(tBucket) - sizeof(uint8_t) + new_bucket_size, alignof(tBucket), kNoInit).ptr;
+        tArenaBucket* new_bucket = (tArenaBucket*)allocator.AllocRaw(sizeof(tArenaBucket) - sizeof(uint8_t) + new_bucket_size, alignof(tArenaBucket), kNoInit).ptr;
         // #TODO Handle out-of-memory properly.
         MTB_ASSERT(new_bucket != nullptr);
         new_bucket->used_size = 0;
@@ -2973,26 +3017,26 @@ void mtb::arena::Grow(tArena& arena, size_t required_size) {
     }
 }
 
-void mtb::arena::Reserve(tArena& arena, size_t total_size) {
+void mtb::Reserve(tArena& arena, size_t total_size) {
     if(total_size > BucketTotalSize(arena.current_bucket)) {
         Grow(arena, total_size);
     }
 }
 
-void mtb::arena::Clear(tArena& arena, bool release_memory /*= true*/) {
+void mtb::Clear(tArena& arena, bool release_memory /*= true*/) {
     ResetToMarker(arena, {}, release_memory);
     if(arena.first_free_bucket && release_memory) {
         tAllocator allocator = arena.child_allocator;
         if(allocator) {
             while(arena.first_free_bucket) {
-                tBucket* bucket = InternalUnlinkBucket(arena.first_free_bucket);
+                tArenaBucket* bucket = InternalUnlinkBucket(arena.first_free_bucket);
                 allocator.FreeOne(bucket);
             }
         }
     }
 }
 
-void* mtb::arena::ReallocRaw(tArena& arena, void* old_ptr, size_t old_size, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) {
+void* mtb::ReallocRaw(tArena& arena, void* old_ptr, size_t old_size, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) {
     if(old_ptr || old_size) {
         MTB_ASSERT(old_ptr && old_size);
     }
@@ -3049,25 +3093,25 @@ void* mtb::arena::ReallocRaw(tArena& arena, void* old_ptr, size_t old_size, size
     return result;
 }
 
-void* mtb::arena::PushRaw(tArena& arena, size_t size, size_t alignment, eInit init) {
+void* mtb::PushRaw(tArena& arena, size_t size, size_t alignment, eInit init) {
     return ReallocRaw(arena, nullptr, 0, 0, size, alignment, init);
 }
 
-mtb::tSlice<void> mtb::arena::ReallocRawArray(tArena& arena, tSlice<void> old_array, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) {
+mtb::tSlice<void> mtb::ReallocRawArray(tArena& arena, tSlice<void> old_array, size_t old_alignment, size_t new_size, size_t new_alignment, eInit init) {
     void* ptr = ReallocRaw(arena, old_array.ptr, old_array.len, old_alignment, new_size, new_alignment, init);
     return PtrSlice(ptr, new_size);
 }
 
-mtb::tSlice<void> mtb::arena::PushRawArray(tArena& arena, size_t size, size_t alignment, eInit init) {
+mtb::tSlice<void> mtb::PushRawArray(tArena& arena, size_t size, size_t alignment, eInit init) {
     return ReallocRawArray(arena, {}, 0, size, alignment, init);
 }
 
-mtb::arena::tArenaMarker mtb::arena::GetMarker(tArena& arena) {
+mtb::tArenaMarker mtb::GetMarker(tArena const& arena) {
     tArenaMarker result{arena.current_bucket, BucketUsedSize(arena.current_bucket)};
     return result;
 }
 
-void mtb::arena::ResetToMarker(tArena& arena, tArenaMarker marker, bool release_memory /*= true*/) {
+void mtb::ResetToMarker(tArena& arena, tArenaMarker marker, bool release_memory /*= true*/) {
     if(arena.current_bucket) {
         tAllocator allocator = arena.child_allocator;
         if(!allocator) {
@@ -3090,9 +3134,9 @@ void mtb::arena::ResetToMarker(tArena& arena, tArenaMarker marker, bool release_
                 }
             }
 
-            tBucket* free_bucket = InternalUnlinkBucket(arena.current_bucket);
+            tArenaBucket* free_bucket = InternalUnlinkBucket(arena.current_bucket);
             if(release_memory) {
-                allocator.FreeRaw(PtrSlice((void*)free_bucket, sizeof(tBucket) - sizeof(uint8_t) + free_bucket->total_size), alignof(tBucket));
+                allocator.FreeRaw(PtrSlice((void*)free_bucket, sizeof(tArenaBucket) - sizeof(uint8_t) + free_bucket->total_size), alignof(tArenaBucket));
             } else {
                 InternalInsertNextBucket(arena.first_free_bucket, free_bucket);
             }
@@ -3104,7 +3148,7 @@ void mtb::arena::ResetToMarker(tArena& arena, tArenaMarker marker, bool release_
     }
 }
 
-mtb::tSlice<void> mtb::arena::Linearize(tArena& arena, tArenaMarker begin, tArenaMarker end) {
+mtb::tSlice<void> mtb::Linearize(tArena& arena, tArenaMarker begin, tArenaMarker end) {
     if(!end.bucket) {
         MTB_ASSERT(!begin.bucket);
     } else if(!begin.bucket) {
@@ -3122,7 +3166,7 @@ mtb::tSlice<void> mtb::arena::Linearize(tArena& arena, tArenaMarker begin, tAren
 
         // determine the size
         size_t required_size = begin.bucket->used_size - begin.offset;
-        for(tBucket* bucket = begin.bucket->next; bucket != end.bucket; bucket = bucket->next) {
+        for(tArenaBucket* bucket = begin.bucket->next; bucket != end.bucket; bucket = bucket->next) {
             required_size += bucket->used_size;
         }
         required_size += end.offset;
@@ -3134,7 +3178,7 @@ mtb::tSlice<void> mtb::arena::Linearize(tArena& arena, tArenaMarker begin, tAren
         size_t cursor = 0;
         MTB_memcpy(result + cursor, begin.bucket->data + begin.offset, begin.bucket->used_size - begin.offset);
         cursor += begin.bucket->used_size - begin.offset;
-        for(tBucket* bucket = begin.bucket->next; bucket != end.bucket; bucket = bucket->next) {
+        for(tArenaBucket* bucket = begin.bucket->next; bucket != end.bucket; bucket = bucket->next) {
             MTB_memcpy(result + cursor, bucket->data, bucket->used_size);
             cursor += bucket->used_size;
         }
@@ -3144,7 +3188,8 @@ mtb::tSlice<void> mtb::arena::Linearize(tArena& arena, tArenaMarker begin, tAren
     return result;
 }
 
-mtb::tAllocator mtb::arena::MakeAllocator(tArena& arena) {
+mtb::tAllocator mtb::MakeAllocator(tArena& arena) {
+    // ReSharper disable once CppInitializedValueIsAlwaysRewritten
     tAllocator result{};
     result.user = &arena;
     result.realloc_proc = InternalArenaAllocatorProc;
@@ -3152,21 +3197,21 @@ mtb::tAllocator mtb::arena::MakeAllocator(tArena& arena) {
 }
 
 #if MTB_USE_STB_SPRINTF
-namespace mtb::arena {
+namespace mtb {
     static char* InternalArenaPrintCallback(char const* buf, void* user, int len) {
-        tArena* arena = (tArena*)user;
+        auto* arena = (tArena*)user;
         tSlice<void> dest = PushRawArray(*arena, len, 1, kNoInit);
         SliceCopyBytes(dest, PtrSlice(buf, len));
-        return (char*)buf;
+        return const_cast<char*>(buf);
     }
-}  // namespace mtb::arena
+}  // namespace mtb
 
-void mtb::arena::vprintf_ArenaRaw(tArena& arena, char const* format, va_list vargs) {
+void mtb::vprintf_ArenaRaw(tArena& arena, char const* format, va_list vargs) {
     char temp_buffer[STB_SPRINTF_MIN];
     stbsp_vsprintfcb(InternalArenaPrintCallback, &arena, temp_buffer, format, vargs);
 }
 
-mtb::tSlice<char> mtb::arena::vprintf_Arena(tArena& arena, char const* format, va_list vargs) {
+mtb::tSlice<char> mtb::vprintf_Arena(tArena& arena, char const* format, va_list vargs) {
     // Remember where we were in this arena.
     tArenaMarker begin_marker = GetMarker(arena);
 
@@ -3174,7 +3219,7 @@ mtb::tSlice<char> mtb::arena::vprintf_Arena(tArena& arena, char const* format, v
     vprintf_ArenaRaw(arena, format, vargs);
 
     // Append the null-terminator.
-    *PushOne<char>(arena, kNoInit) = 0;
+    PushOne<char>(arena, kNoInit) = 0;
 
     // Make sure all formatted string fragments we produced are actually linear in memory.
     tSlice<char> result = SliceCast<char>(Linearize(arena, begin_marker, GetMarker(arena)));
@@ -3187,36 +3232,36 @@ mtb::tSlice<char> mtb::arena::vprintf_Arena(tArena& arena, char const* format, v
 }
 #endif  // MTB_USE_STB_SPRINTF
 
-namespace mtb::string {
+namespace mtb::impl {
     template<typename C>
     C Impl_ToLowerChar(C c) {
         switch(c) {
-            case 'a': return 'a';
-            case 'b': return 'b';
-            case 'C': return 'c';
-            case 'D': return 'd';
-            case 'E': return 'e';
-            case 'F': return 'f';
-            case 'G': return 'g';
-            case 'H': return 'h';
-            case 'I': return 'i';
-            case 'J': return 'j';
-            case 'K': return 'k';
-            case 'L': return 'l';
-            case 'M': return 'm';
-            case 'N': return 'n';
-            case 'O': return 'o';
-            case 'P': return 'p';
-            case 'Q': return 'q';
-            case 'R': return 'r';
-            case 'S': return 's';
-            case 'T': return 't';
-            case 'U': return 'u';
-            case 'V': return 'v';
-            case 'W': return 'w';
-            case 'X': return 'x';
-            case 'Y': return 'y';
-            case 'Z': return 'z';
+            case (C)'a': return (C)'a';
+            case (C)'b': return (C)'b';
+            case (C)'C': return (C)'c';
+            case (C)'D': return (C)'d';
+            case (C)'E': return (C)'e';
+            case (C)'F': return (C)'f';
+            case (C)'G': return (C)'g';
+            case (C)'H': return (C)'h';
+            case (C)'I': return (C)'i';
+            case (C)'J': return (C)'j';
+            case (C)'K': return (C)'k';
+            case (C)'L': return (C)'l';
+            case (C)'M': return (C)'m';
+            case (C)'N': return (C)'n';
+            case (C)'O': return (C)'o';
+            case (C)'P': return (C)'p';
+            case (C)'Q': return (C)'q';
+            case (C)'R': return (C)'r';
+            case (C)'S': return (C)'s';
+            case (C)'T': return (C)'t';
+            case (C)'U': return (C)'u';
+            case (C)'V': return (C)'v';
+            case (C)'W': return (C)'w';
+            case (C)'X': return (C)'x';
+            case (C)'Y': return (C)'y';
+            case (C)'Z': return (C)'z';
             default: return c;
         }
     }
@@ -3224,32 +3269,32 @@ namespace mtb::string {
     template<typename C>
     C Impl_ToUpperChar(C c) {
         switch(c) {
-            case 'a': return 'a';
-            case 'b': return 'b';
-            case 'c': return 'C';
-            case 'd': return 'D';
-            case 'e': return 'E';
-            case 'f': return 'F';
-            case 'g': return 'G';
-            case 'h': return 'H';
-            case 'i': return 'I';
-            case 'j': return 'J';
-            case 'k': return 'K';
-            case 'l': return 'L';
-            case 'm': return 'M';
-            case 'n': return 'N';
-            case 'o': return 'O';
-            case 'p': return 'P';
-            case 'q': return 'Q';
-            case 'r': return 'R';
-            case 's': return 'S';
-            case 't': return 'T';
-            case 'u': return 'U';
-            case 'v': return 'V';
-            case 'w': return 'W';
-            case 'x': return 'X';
-            case 'y': return 'Y';
-            case 'z': return 'Z';
+            case (C)'a': return (C)'a';
+            case (C)'b': return (C)'b';
+            case (C)'c': return (C)'C';
+            case (C)'d': return (C)'D';
+            case (C)'e': return (C)'E';
+            case (C)'f': return (C)'F';
+            case (C)'g': return (C)'G';
+            case (C)'h': return (C)'H';
+            case (C)'i': return (C)'I';
+            case (C)'j': return (C)'J';
+            case (C)'k': return (C)'K';
+            case (C)'l': return (C)'L';
+            case (C)'m': return (C)'M';
+            case (C)'n': return (C)'N';
+            case (C)'o': return (C)'O';
+            case (C)'p': return (C)'P';
+            case (C)'q': return (C)'Q';
+            case (C)'r': return (C)'R';
+            case (C)'s': return (C)'S';
+            case (C)'t': return (C)'T';
+            case (C)'u': return (C)'U';
+            case (C)'v': return (C)'V';
+            case (C)'w': return (C)'W';
+            case (C)'x': return (C)'X';
+            case (C)'y': return (C)'Y';
+            case (C)'z': return (C)'Z';
             default: return c;
         }
     }
@@ -3257,16 +3302,16 @@ namespace mtb::string {
     template<typename C>
     bool Impl_IsDigitChar(C c) {
         switch(c) {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
+            case (C)'0':
+            case (C)'1':
+            case (C)'2':
+            case (C)'3':
+            case (C)'4':
+            case (C)'5':
+            case (C)'6':
+            case (C)'7':
+            case (C)'8':
+            case (C)'9':
                 return true;
             default:
                 return false;
@@ -3276,12 +3321,12 @@ namespace mtb::string {
     template<typename C>
     bool Impl_IsWhiteChar(C c) {
         switch(c) {
-            case ' ':
-            case '\n':
-            case '\r':
-            case '\t':
-            case '\v':
-            case '\b':
+            case (C)' ':
+            case (C)'\n':
+            case (C)'\r':
+            case (C)'\t':
+            case (C)'\v':
+            case (C)'\b':
                 return true;
             default:
                 return false;
@@ -3326,7 +3371,7 @@ namespace mtb::string {
     bool Impl_StringStartsWith(tSlice<C const> str, tSlice<C const> prefix, eStringComparison cmp) {
         bool result = false;
         if(str.len >= prefix.len) {
-            result = StringEquals(SliceRange(str, 0, prefix.len), prefix, cmp);
+            result = StringsAreEqual(SliceRange(str, 0, prefix.len), prefix, cmp);
         }
 
         return result;
@@ -3337,7 +3382,7 @@ namespace mtb::string {
         bool result = false;
         if(str.len >= prefix.len) {
             size_t offset = str.len - prefix.len;
-            result = StringEquals(SliceBetween(str, offset, str.len), prefix, cmp);
+            result = StringsAreEqual(SliceBetween(str, offset, str.len), prefix, cmp);
         }
 
         return result;
@@ -3388,168 +3433,162 @@ namespace mtb::string {
     template<typename C>
     size_t Impl_StringLengthZ(C const* str_z) {
         size_t result = 0;
-        if(str_z) {
-            while(str_z[result]) {
+        if(C const* s = str_z) {
+            while(*s++) {
                 ++result;
             }
         }
 
         return result;
     }
-}  // namespace mtb::string
+}  // namespace mtb::impl
 
-char mtb::string::ToLowerChar(char c) {
-    return Impl_ToLowerChar(c);
+size_t mtb::StringLengthZ(char const* str_z) {
+    return impl::Impl_StringLengthZ(str_z);
 }
 
-char mtb::string::ToUpperChar(char c) {
-    return Impl_ToUpperChar(c);
+size_t mtb::StringLengthZ(wchar_t const* str_z) {
+    return impl::Impl_StringLengthZ(str_z);
 }
 
-bool mtb::string::IsDigitChar(char c) {
-    return Impl_IsDigitChar(c);
+char mtb::ToLowerChar(char c) {
+    return impl::Impl_ToLowerChar(c);
+}
+wchar_t mtb::ToLowerChar(wchar_t c) {
+    return impl::Impl_ToLowerChar(c);
 }
 
-bool mtb::string::IsWhiteChar(char c) {
-    return Impl_IsWhiteChar(c);
+char mtb::ToUpperChar(char c) {
+    return impl::Impl_ToUpperChar(c);
+}
+wchar_t mtb::ToUpperChar(wchar_t c) {
+    return impl::Impl_ToUpperChar(c);
 }
 
-int32_t mtb::string::StringCompare(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp /*= kCaseSensitive*/) {
-    return Impl_StringCompare(str_a, str_b, cmp);
+bool mtb::IsDigitChar(char c) {
+    return impl::Impl_IsDigitChar(c);
+}
+bool mtb::IsDigitChar(wchar_t c) {
+    return impl::Impl_IsDigitChar(c);
 }
 
-bool mtb::string::StringEquals(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp) {
-    return Impl_StringCompare(str_a, str_b, cmp) == 0;
+bool mtb::IsWhiteChar(char c) {
+    return impl::Impl_IsWhiteChar(c);
 }
 
-bool mtb::string::StringStartsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp) {
-    return Impl_StringStartsWith(str, prefix, cmp);
+bool mtb::IsWhiteChar(wchar_t c) {
+    return impl::Impl_IsWhiteChar(c);
 }
 
-bool mtb::string::StringEndsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp) {
-    return Impl_StringEndsWith(str, prefix, cmp);
+int32_t mtb::StringCompare(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp /*= kCaseSensitive*/) {
+    return impl::Impl_StringCompare(str_a, str_b, cmp);
+}
+int32_t mtb::StringCompare(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp /*= kCaseSensitive*/) {
+    return impl::Impl_StringCompare(str_a, str_b, cmp);
 }
 
-mtb::tSlice<char const> mtb::string::StringTrimStartPredicate(tSlice<char const> str, tTrimPredicate Predicate) {
-    return Impl_StringTrimStartPredicate<char const>(str, Predicate);
+bool mtb::StringsAreEqual(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp) {
+    return impl::Impl_StringCompare(str_a, str_b, cmp) == 0;
 }
 
-mtb::tSlice<char const> mtb::string::StringTrimEndPredicate(tSlice<char const> str, tTrimPredicate Predicate) {
-    return Impl_StringTrimEndPredicate(str, Predicate);
+bool mtb::StringsAreEqual(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp) {
+    return impl::Impl_StringCompare(str_a, str_b, cmp) == 0;
 }
 
-mtb::tSlice<char const> mtb::string::StringTrimPredicate(tSlice<char const> str, tTrimPredicate Predicate) {
+bool mtb::StringStartsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp) {
+    return impl::Impl_StringStartsWith(str, prefix, cmp);
+}
+bool mtb::StringStartsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp) {
+    return impl::Impl_StringStartsWith(str, prefix, cmp);
+}
+
+bool mtb::StringEndsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp) {
+    return impl::Impl_StringEndsWith(str, prefix, cmp);
+}
+
+bool mtb::StringEndsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp) {
+    return impl::Impl_StringEndsWith(str, prefix, cmp);
+}
+
+mtb::tSlice<char const> mtb::StringTrimStartPredicate(tSlice<char const> str, tTrimPredicate Predicate) {
+    return impl::Impl_StringTrimStartPredicate<char const>(str, Predicate);
+}
+
+mtb::tSlice<wchar_t const> mtb::StringTrimStartPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate) {
+    return impl::Impl_StringTrimStartPredicate(str, Predicate);
+}
+
+mtb::tSlice<char const> mtb::StringTrimEndPredicate(tSlice<char const> str, tTrimPredicate Predicate) {
+    return impl::Impl_StringTrimEndPredicate(str, Predicate);
+}
+
+mtb::tSlice<wchar_t const> mtb::StringTrimEndPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate) {
+    return impl::Impl_StringTrimEndPredicate(str, Predicate);
+}
+mtb::tSlice<char const> mtb::StringTrimPredicate(tSlice<char const> str, tTrimPredicate Predicate) {
     return StringTrimStartPredicate(StringTrimEndPredicate(str, Predicate), Predicate);
 }
 
-mtb::tSlice<char const> mtb::string::StringTrimStart(tSlice<char const> str) {
+mtb::tSlice<wchar_t const> mtb::StringTrimPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate) {
+    return StringTrimStartPredicate(StringTrimEndPredicate(str, Predicate), Predicate);
+}
+
+mtb::tSlice<char const> mtb::StringTrimStart(tSlice<char const> str) {
     return StringTrimStartPredicate(str, IsWhiteChar);
 }
 
-mtb::tSlice<char const> mtb::string::StringTrimEnd(tSlice<char const> str) {
+mtb::tSlice<wchar_t const> mtb::StringTrimStart(tSlice<wchar_t const> str) {
+    return StringTrimStartPredicate(str, IsWhiteChar);
+}
+
+mtb::tSlice<char const> mtb::StringTrimEnd(tSlice<char const> str) {
     return StringTrimEndPredicate(str, IsWhiteChar);
 }
 
-mtb::tSlice<char const> mtb::string::StringTrim(tSlice<char const> str) {
+mtb::tSlice<wchar_t const> mtb::StringTrimEnd(tSlice<wchar_t const> str) {
+    return StringTrimEndPredicate(str, IsWhiteChar);
+}
+
+mtb::tSlice<char const> mtb::StringTrim(tSlice<char const> str) {
     return StringTrimPredicate(str, IsWhiteChar);
 }
 
-mtb::tSlice<char> mtb::string::AllocString(tAllocator a, size_t char_count) {
-    return Impl_AllocString<char>(a, char_count);
+mtb::tSlice<wchar_t const> mtb::StringTrim(tSlice<wchar_t const> str) {
+    return StringTrimPredicate(str, IsWhiteChar);
 }
 
-mtb::tSlice<char> mtb::string::DupeString(tAllocator a, tSlice<char const> str) {
-    return Impl_DupeString(a, str);
+mtb::tSlice<char> mtb::AllocString(tAllocator a, size_t char_count) {
+    return impl::Impl_AllocString<char>(a, char_count);
 }
 
-void mtb::string::FreeString(tAllocator a, tSlice<char> str) {
+mtb::tSlice<wchar_t> mtb::AllocWString(tAllocator a, size_t char_count) {
+    return impl::Impl_AllocString<wchar_t>(a, char_count);
+}
+
+mtb::tSlice<char> mtb::DupeString(tAllocator a, tSlice<char const> str) {
+    return impl::Impl_DupeString(a, str);
+}
+
+mtb::tSlice<wchar_t> mtb::DupeString(tAllocator a, tSlice<wchar_t const> str) {
+    return impl::Impl_DupeString(a, str);
+}
+
+void mtb::FreeString(tAllocator a, tSlice<char> str) {
     ++str.len;
     a.FreeArray(str);
 }
-
-size_t mtb::string::StringLengthZ(char const* str_z) {
-    return Impl_StringLengthZ(str_z);
-}
-
-wchar_t mtb::string::ToLowerChar(wchar_t c) {
-    return Impl_ToLowerChar(c);
-}
-
-wchar_t mtb::string::ToUpperChar(wchar_t c) {
-    return Impl_ToUpperChar(c);
-}
-
-bool mtb::string::IsDigitChar(wchar_t c) {
-    return Impl_IsDigitChar(c);
-}
-
-bool mtb::string::IsWhiteChar(wchar_t c) {
-    return Impl_IsWhiteChar(c);
-}
-
-int32_t mtb::string::StringCompare(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp /*= kCaseSensitive*/) {
-    return Impl_StringCompare(str_a, str_b, cmp);
-}
-
-bool mtb::string::StringEquals(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp) {
-    return Impl_StringCompare(str_a, str_b, cmp) == 0;
-}
-
-bool mtb::string::StringStartsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp) {
-    return Impl_StringStartsWith(str, prefix, cmp);
-}
-
-bool mtb::string::StringEndsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp) {
-    return Impl_StringEndsWith(str, prefix, cmp);
-}
-
-mtb::tSlice<wchar_t const> mtb::string::StringTrimStartPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate) {
-    return Impl_StringTrimStartPredicate(str, Predicate);
-}
-
-mtb::tSlice<wchar_t const> mtb::string::StringTrimEndPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate) {
-    return Impl_StringTrimEndPredicate(str, Predicate);
-}
-
-mtb::tSlice<wchar_t const> mtb::string::StringTrimPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate) {
-    return StringTrimStartPredicate(StringTrimEndPredicate(str, Predicate), Predicate);
-}
-
-mtb::tSlice<wchar_t const> mtb::string::StringTrimStart(tSlice<wchar_t const> str) {
-    return StringTrimStartPredicate(str, IsWhiteChar);
-}
-
-mtb::tSlice<wchar_t const> mtb::string::StringTrimEnd(tSlice<wchar_t const> str) {
-    return StringTrimEndPredicate(str, IsWhiteChar);
-}
-
-mtb::tSlice<wchar_t const> mtb::string::StringTrim(tSlice<wchar_t const> str) {
-    return StringTrimPredicate(str, IsWhiteChar);
-}
-
-mtb::tSlice<wchar_t> mtb::string::AllocWString(tAllocator a, size_t char_count) {
-    return Impl_AllocString<wchar_t>(a, char_count);
-}
-
-mtb::tSlice<wchar_t> mtb::string::DupeString(tAllocator a, tSlice<wchar_t const> str) {
-    return Impl_DupeString(a, str);
-}
-
-size_t mtb::string::StringLengthZ(wchar_t const* str_z) {
-    return Impl_StringLengthZ(str_z);
-}
-
-void mtb::string::FreeWString(tAllocator a, tSlice<wchar_t> str) {
+void mtb::FreeString(tAllocator a, tSlice<wchar_t> str) {
     ++str.len;
     a.FreeArray(str);
 }
 
 void mtb::BreakIntoUnits(uint64_t value, tSlice<uint64_t const> units_table, tSlice<uint32_t> out_results) {
-    uint64_t Remaining = value;
+    uint64_t remaining = value;
     for(ptrdiff_t index = 0; index < units_table.len; ++index) {
-        uint64_t Unit = units_table.ptr[index];
-        uint32_t result = (uint32_t)(Remaining / Unit);
-        Remaining -= (uint64_t)(result * Unit);
+        uint64_t unit = units_table.ptr[index];
+        MTB_ASSERT(unit > 0);
+        auto result = (uint32_t)(remaining / unit);
+        remaining -= result * unit;
 
         out_results[index] = result;
     }
@@ -3565,7 +3604,7 @@ mtb::time::tClockTime mtb::time::ClockTimeFromTimespan(tTimespan timespan) {
         Total = IntCast<uint64_t>(timespan.nanoseconds);
     }
 
-    uint64_t Units[7]{
+    uint64_t units[7]{
         days_to_nanoseconds,
         hours_to_nanoseconds,
         minutes_to_nanoseconds,
@@ -3574,7 +3613,7 @@ mtb::time::tClockTime mtb::time::ClockTimeFromTimespan(tTimespan timespan) {
         microseconds_to_nanoseconds,
         1,
     };
-    BreakIntoUnits(Total, ArraySlice(Units), PtrSlice(&result.days, 7));
+    BreakIntoUnits(Total, ArraySlice(units), PtrSlice(&result.days, 7));
 
     return result;
 }
@@ -3585,7 +3624,6 @@ mtb::time::tClockTime mtb::time::ClockTimeFromTimespan(tTimespan timespan) {
 #if MTB_TESTS
 DOCTEST_TEST_SUITE("mtb::tArena_SKIP") {
     using namespace mtb;
-    using namespace mtb::arena;
 
     ptrdiff_t BucketCount(tArena& arena) {
         ptrdiff_t result = 0;
@@ -3674,14 +3712,14 @@ DOCTEST_TEST_SUITE("mtb::tArena_SKIP") {
         arena.min_bucket_size = 1;
         MTB_DEFER { Clear(arena, true); };
 
-        *PushOne<int>(arena) = 1;
-        *PushOne<int>(arena) = 2;
-        *PushOne<int>(arena) = 3;
+        PushOne<int>(arena) = 1;
+        PushOne<int>(arena) = 2;
+        PushOne<int>(arena) = 3;
         tArenaMarker MidMarker = GetMarker(arena);
-        *PushOne<int>(arena) = 4;
-        *PushOne<int>(arena) = 5;
-        *PushOne<int>(arena) = 6;
-        *PushOne<int>(arena) = 7;
+        PushOne<int>(arena) = 4;
+        PushOne<int>(arena) = 5;
+        PushOne<int>(arena) = 6;
+        PushOne<int>(arena) = 7;
         tArenaMarker end_marker = GetMarker(arena);
 
         tSlice<int> left = SliceCast<int>(Linearize(arena, {}, MidMarker));
@@ -3802,7 +3840,7 @@ DOCTEST_TEST_SUITE("mtb::tArena_SKIP") {
 
 <?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
-    <Type Name="::mtb::arena::tBucket">
+    <Type Name="::mtb::tBucket">
         <DisplayString>Used={used_size}/{total_size}</DisplayString>
         <Expand>
             <item Name="Used size">used_size</item>
@@ -3837,7 +3875,7 @@ DOCTEST_TEST_SUITE("mtb::tArena_SKIP") {
         </Expand>
     </Type>
 
-    <Type Name="::mtb::arena::tArena">
+    <Type Name="::mtb::tArena">
         <DisplayString>Current bucket {*current_bucket}</DisplayString>
     </Type>
 
@@ -3884,7 +3922,7 @@ DOCTEST_TEST_SUITE("mtb::tArena_SKIP") {
     </Type>
 
     <Type Name="::mtb::tArray &lt; * &gt;">
-        <DisplayString>{slice}</DisplayString>
+        <DisplayString>{items}</DisplayString>
         <Expand>
             <Synthetic Name="[Slack]">
                 <DisplayString>{{{cap - count} items ({(cap - count) * sizeof(*ptr)} bytes)}}</DisplayString>
@@ -3904,7 +3942,7 @@ DOCTEST_TEST_SUITE("mtb::tArena_SKIP") {
                     </ArrayItems>
                 </Expand>
             </Synthetic>
-            <ExpandedItem>slice</ExpandedItem>
+            <ExpandedItem>items</ExpandedItem>
         </Expand>
     </Type>
 
