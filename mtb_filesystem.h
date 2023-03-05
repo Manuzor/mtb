@@ -97,10 +97,14 @@ typedef struct mfs_Error {
 /*
     Pointer + Length pair. String data is expected to be encoded as UTF-8.
 */
+#if defined(MTB_INCLUDED)
+using mfs_String = ::mtb::tSlice<char const>;
+#else
 typedef struct mfs_String {
     char const* ptr;
     ptrdiff_t len;
 } mfs_String;
+#endif
 
 typedef enum mfs_PathType {
     mfs_PathType_Auto,
