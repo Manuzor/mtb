@@ -2,13 +2,6 @@
     mtb string builder (mstr)
 */
 
-#if defined(MSTR_IMPLEMENTATION)
-#undef MSTR_IMPLEMENTATION
-#define MSTR_IMPLEMENTATION 1
-#else
-#define MSTR_IMPLEMENTATION 0
-#endif
-
 #if !defined(MSTR_INCLUDED)
 #define MSTR_INCLUDED
 
@@ -23,9 +16,14 @@ typedef struct mstr_Allocator {
     void* (*realloc_cb)(void* user, void* old_ptr, size_t old_size, size_t new_size);
 } mstr_Allocator;
 
-#if defined(MTB__INCLUDED)
-mstr_Allocator mstr_WrapMtbAllocator(mtb::tAllocator& allocator);
+#if defined(MTB_INCLUDED)
+namespace mstr {
+    mstr_Allocator WrapMtbAllocator(mtb::tAllocator& allocator);
+}
 #endif
+
+bool mstr_IsWhiteChar(char c);
+bool mstr_IsDigit(char c);
 
 typedef struct mstr_Builder {
     mstr_Allocator allocator;
@@ -43,7 +41,7 @@ void mstr_AppendString(mstr_Builder* b, char const* str, size_t str_len);
 void mstr_AppendStringZ(mstr_Builder* b, char const* str);
 
 void mstr_TrimEnd(mstr_Builder* b);
-char* mstr_ToString(mstr_Builder* b);
+char* mstr_Finish(mstr_Builder* b);
 
 #if defined(STB_SPRINTF_H_INCLUDE)
 /* NOTE: If you want to use mstr_AppendFormat, include stb_sprintf.h first! */
@@ -75,15 +73,13 @@ namespace mstr {
         Builder& AppendString(char const* str, size_t str_len) { mstr_AppendString(this, str, str_len); return *this; }
         Builder& AppendStringZ(char const* str) { mstr_AppendStringZ(this, str); return *this; }
         Builder& TrimEnd() { mstr_TrimEnd(this); return *this; }
-        char* ToStringZ() { return mstr_ToString(this); }
+        Builder& Finish() { (void)mstr_Finish(this); return *this; }
 
         /* clang-format on */
 
-        /* Null-terminate and shrink allocation. */
-        Builder& Finish() {
-            (void)mstr_ToString(this);
-            return *this;
-        }
+#if defined(MTB_INCLUDED)
+        ::mtb::tSlice<char> AsSlice() { return {ptr, (ptrdiff_t)len}; }
+#endif
 
 #if defined(STB_SPRINTF_H_INCLUDE)
         /* NOTE: If you want to use AppendFormat, include stb_sprintf.h first! */
@@ -93,9 +89,6 @@ namespace mstr {
     };
 } /* namespace mstr */
 #endif /* defined(__cplusplus) */
-
-bool mstr_IsWhitespace(char c);
-bool mstr_IsDigit(char c);
 
 typedef union mstr_Number {
     double f64;
@@ -114,13 +107,33 @@ typedef struct mstr_ParseResult {
     char const* tail_ptr;
     size_t tail_len;
     mstr_Number value;
+#if defined(MTB_INCLUDED)
+    ::mtb::tSlice<char const> Tail() const { return {tail_ptr, (ptrdiff_t)tail_len}; }
+#endif
 } mstr_ParseResult;
 
 mstr_ParseResult mstr_ParseFloat(char const* str_ptr, size_t str_len, mstr_ParseOptions options);
 mstr_ParseResult mstr_ParseUnsignedInteger(char const* str_ptr, size_t str_len, mstr_ParseOptions options);
 mstr_ParseResult mstr_ParseSignedInteger(char const* str_ptr, size_t str_len, mstr_ParseOptions options);
 
-#endif /* MSTR_INCLUDED */
+#if defined(MTB_INCLUDED)
+namespace mtb {
+    inline mstr_ParseResult mstr_ParseFloat(tSlice<char const> str, mstr_ParseOptions options) { return mstr_ParseFloat(str.ptr, (size_t)str.len, options); }
+
+    inline mstr_ParseResult mstr_ParseUnsignedInteger(tSlice<char const> str, mstr_ParseOptions options) { return mstr_ParseUnsignedInteger(str.ptr, (size_t)str.len, options); }
+
+    inline mstr_ParseResult mstr_ParseSignedInteger(tSlice<char const> str, mstr_ParseOptions options) { return mstr_ParseSignedInteger(str.ptr, (size_t)str.len, options); }
+}  // namespace mtb
+#endif
+
+#endif /* !defined(MSTR_INCLUDED) */
+
+#if defined(MSTR_IMPLEMENTATION)
+#undef MSTR_IMPLEMENTATION
+#define MSTR_IMPLEMENTATION 1
+#else
+#define MSTR_IMPLEMENTATION 0
+#endif
 
 #if MSTR_IMPLEMENTATION
 
@@ -153,22 +166,54 @@ static mstr_Allocator mstr__GetAllocator(mstr_Builder* b) {
     return result;
 }
 
-#if defined(MTB__INCLUDED)
-static void* mstr__MtbReallocCallback(void* user, void* old_ptr, size_t old_size, size_t new_size) {
-    MFS_ASSERT(user);
-    mtb::tAllocator& a = *(mtb::tAllocator*)user;
-    mtb::tSlice<void> new_mem = a.ResizeArray(mtb::PtrSlice(old_ptr, old_size), new_size, mtb::kNoInit);
-    MSTR_ASSERT((size_t)new_mem.len == new_size);
-    return new_mem.ptr;
-}
+#if defined(MTB_INCLUDED)
+namespace mstr::impl {
+    static void* MtbReallocCallback(void* user, void* old_ptr, size_t old_size, size_t new_size) {
+        MFS_ASSERT(user);
+        mtb::tAllocator& a = *(mtb::tAllocator*)user;
+        mtb::tSlice<void> new_mem = a.ResizeArray(mtb::PtrSlice(old_ptr, old_size), new_size, mtb::kNoInit);
+        MSTR_ASSERT((size_t)new_mem.len == new_size);
+        return new_mem.ptr;
+    }
+}  // namespace mstr::impl
 
-mstr_Allocator mstr_WrapMtbAllocator(mtb::tAllocator& mtb_allocator) {
+mstr_Allocator mstr::WrapMtbAllocator(mtb::tAllocator& mtb_allocator) {
     mstr_Allocator result = {};
     result.user = &mtb_allocator;
-    result.realloc_cb = &mstr__MtbReallocCallback;
+    result.realloc_cb = &impl::MtbReallocCallback;
     return result;
 }
 #endif
+
+bool mstr_IsWhiteChar(char c) {
+    switch(c) {
+        case ' ':
+        case '\n':
+        case '\r':
+        case '\t':
+        case '\v':
+        case '\b':
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool mstr_IsDigit(char c) {
+    switch(c) {
+        case '0':  // fallthrough
+        case '1':  // fallthrough
+        case '2':  // fallthrough
+        case '3':  // fallthrough
+        case '4':  // fallthrough
+        case '5':  // fallthrough
+        case '6':  // fallthrough
+        case '7':  // fallthrough
+        case '8':  // fallthrough
+        case '9': return true;
+        default: return false;
+    }
+}
 
 void mstr_ShrinkAllocation(mstr_Builder* b) {
     mstr_Allocator a = mstr__GetAllocator(b);
@@ -226,7 +271,7 @@ void mstr_TrimEnd(mstr_Builder* b) {
     }
 }
 
-char* mstr_ToString(mstr_Builder* b) {
+char* mstr_Finish(mstr_Builder* b) {
     mstr_EnsureCapacity(b, b->len + 1);
     b->ptr[b->len] = 0;
     b->len += 1;
@@ -256,32 +301,28 @@ void mstr_AppendFormatV(mstr_Builder* b, char const* format, va_list args) {
     char buf[STB_SPRINTF_MIN];
     stbsp_vsprintfcb(&mstr__StbSprintfCallback, b, buf, format, args);
 }
+#endif /* defined(STB_SPRINTF_H_INCLUDE) */
 
-bool mstr_IsWhitespace(char c) {
-    return c == ' ';  // TODO
+#if defined(STB_SPRINTF_H_INCLUDE) && defined(__cplusplus)
+mstr::Builder& mstr::Builder::AppendFormat(char const* format, ...) {
+    va_list args;
+    va_start(args, format);
+    mstr_AppendFormatV(this, format, args);
+    va_end(args);
+    return *this;
 }
 
-bool mstr_IsDigit(char c) {
-    switch(c) {
-        case '0':  // fallthrough
-        case '1':  // fallthrough
-        case '2':  // fallthrough
-        case '3':  // fallthrough
-        case '4':  // fallthrough
-        case '5':  // fallthrough
-        case '6':  // fallthrough
-        case '7':  // fallthrough
-        case '8':  // fallthrough
-        case '9': return true;
-        default: return false;
-    }
+mstr::Builder& mstr::Builder::AppendFormatV(char const* format, va_list args) {
+    mstr_AppendFormatV(this, format, args);
+    return *this;
 }
+#endif  // defined(STB_SPRINTF_H_INCLUDE) && defined(__cplusplus)
 
 static size_t mstr__TrimWhitespaceFront(char const** inout_ptr, size_t* inout_len) {
     char const* ptr = *inout_ptr;
     size_t len = *inout_len;
 
-    while(len && mstr_IsWhitespace(ptr[0])) {
+    while(len && mstr_IsWhiteChar(ptr[0])) {
         ++ptr;
         --len;
     }
@@ -493,25 +534,4 @@ mstr_ParseResult mstr_ParseSignedInteger(char const* str_ptr, size_t str_len, ms
     return result;
 }
 
-#if defined(__cplusplus)
-
-#if defined(STB_SPRINTF_H_INCLUDE)
-mstr::Builder& mstr::Builder::AppendFormat(char const* format, ...) {
-    va_list args;
-    va_start(args, format);
-    mstr_AppendFormatV(this, format, args);
-    va_end(args);
-    return *this;
-}
-
-mstr::Builder& mstr::Builder::AppendFormatV(char const* format, va_list args) {
-    mstr_AppendFormatV(this, format, args);
-    return *this;
-}
-#endif /* defined(STB_SPRINTF_H_INCLUDE) */
-
-#endif /* defined(__cplusplus) */
-
 #endif /* MSTR_IMPLEMENTATION */
-
-#endif /* !defined(MSTR_INCLUDED) */
