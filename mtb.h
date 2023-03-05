@@ -2245,6 +2245,12 @@ namespace mtb {
 // -- #Section Strings ------------------------------
 // --------------------------------------------------
 namespace mtb {
+    namespace literals {
+        /// Create an mtb::tSlice<char const> from a string literal.
+        static tSlice<char const> operator""_s(char const* str, size_t len) {
+            return {.ptr = str, .len = (ptrdiff_t)len};
+        }
+    }  // namespace literals
 
     //
     // Types
@@ -2264,7 +2270,6 @@ namespace mtb {
     MTB_NODISCARD inline tSlice<wchar_t> WrapZ(wchar_t* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
 
     MTB_NODISCARD inline tSlice<char const> ConstZ(char const* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
-
     MTB_NODISCARD inline tSlice<wchar_t const> ConstZ(wchar_t const* str_z) { return PtrSlice(str_z, StringLengthZ(str_z)); }
 
     //
@@ -2290,19 +2295,15 @@ namespace mtb {
     // String comparison
 
     MTB_NODISCARD int32_t StringCompare(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp = kCaseSensitive);
-
     MTB_NODISCARD int32_t StringCompare(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp = kCaseSensitive);
 
     MTB_NODISCARD bool StringsAreEqual(tSlice<char const> str_a, tSlice<char const> str_b, eStringComparison cmp = kCaseSensitive);
-
     MTB_NODISCARD bool StringsAreEqual(tSlice<wchar_t const> str_a, tSlice<wchar_t const> str_b, eStringComparison cmp = kCaseSensitive);
 
     MTB_NODISCARD bool StringStartsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp = kCaseSensitive);
-
     MTB_NODISCARD bool StringStartsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp = kCaseSensitive);
 
     MTB_NODISCARD bool StringEndsWith(tSlice<char const> str, tSlice<char const> prefix, eStringComparison cmp = kCaseSensitive);
-
     MTB_NODISCARD bool StringEndsWith(tSlice<wchar_t const> str, tSlice<wchar_t const> prefix, eStringComparison cmp = kCaseSensitive);
 
     //
@@ -2310,59 +2311,41 @@ namespace mtb {
     //
 
     MTB_NODISCARD tSlice<char const> StringTrimStartPredicate(tSlice<char const> str, tTrimPredicate Predicate);
-
     MTB_NODISCARD inline tSlice<char> StringTrimStartPredicate(tSlice<char> str, tTrimPredicate Predicate) { return SliceRemoveConst(StringTrimStartPredicate((tSlice<char const>)str, Predicate)); }
+    MTB_NODISCARD tSlice<wchar_t const> StringTrimStartPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrimStartPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimStartPredicate((tSlice<wchar_t const>)str, Predicate)); }
 
     MTB_NODISCARD tSlice<char const> StringTrimStart(tSlice<char const> str);
-
     MTB_NODISCARD inline tSlice<char> StringTrimStart(tSlice<char> str) { return SliceRemoveConst(StringTrimStart((tSlice<char const>)str)); }
+    MTB_NODISCARD tSlice<wchar_t const> StringTrimStart(tSlice<wchar_t const> str);
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrimStart(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrimStart((tSlice<wchar_t const>)str)); }
 
     //
     // Trim End
     //
 
     MTB_NODISCARD tSlice<char const> StringTrimEndPredicate(tSlice<char const> str, tTrimPredicate Predicate);
-
     MTB_NODISCARD inline tSlice<char> StringTrimEndPredicate(tSlice<char> str, tTrimPredicate Predicate) { return SliceRemoveConst(StringTrimEndPredicate((tSlice<char const>)str, Predicate)); }
+    MTB_NODISCARD tSlice<wchar_t const> StringTrimEndPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrimEndPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimEndPredicate((tSlice<wchar_t const>)str, Predicate)); }
 
     MTB_NODISCARD tSlice<char const> StringTrimEnd(tSlice<char const> str);
-
     MTB_NODISCARD inline tSlice<char> StringTrimEnd(tSlice<char> str) { return SliceRemoveConst(StringTrimEnd((tSlice<char const>)str)); }
+    MTB_NODISCARD tSlice<wchar_t const> StringTrimEnd(tSlice<wchar_t const> str);
+    MTB_NODISCARD inline tSlice<wchar_t> StringTrimEnd(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrimEnd((tSlice<wchar_t const>)str)); }
 
     //
     // Trim (both ends)
     //
 
     MTB_NODISCARD tSlice<char const> StringTrimPredicate(tSlice<char const> str, tTrimPredicate Predicate);
-
     MTB_NODISCARD inline tSlice<char> StringTrimPredicate(tSlice<char> str, tTrimPredicate Predicate) { return SliceRemoveConst(StringTrimPredicate((tSlice<char const>)str, Predicate)); }
-
-    MTB_NODISCARD tSlice<char const> StringTrim(tSlice<char const> str);
-
-    MTB_NODISCARD inline tSlice<char> StringTrim(tSlice<char> str) { return SliceRemoveConst(StringTrim((tSlice<char const>)str)); }
-
-    MTB_NODISCARD tSlice<wchar_t const> StringTrimStartPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
-
-    MTB_NODISCARD inline tSlice<wchar_t> StringTrimStartPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimStartPredicate((tSlice<wchar_t const>)str, Predicate)); }
-
-    MTB_NODISCARD tSlice<wchar_t const> StringTrimEndPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
-
-    MTB_NODISCARD inline tSlice<wchar_t> StringTrimEndPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimEndPredicate((tSlice<wchar_t const>)str, Predicate)); }
-
     MTB_NODISCARD tSlice<wchar_t const> StringTrimPredicate(tSlice<wchar_t const> str, tWTrimPredicate Predicate);
-
     MTB_NODISCARD inline tSlice<wchar_t> StringTrimPredicate(tSlice<wchar_t> str, tWTrimPredicate Predicate) { return SliceRemoveConst(StringTrimPredicate((tSlice<wchar_t const>)str, Predicate)); }
 
-    MTB_NODISCARD tSlice<wchar_t const> StringTrimStart(tSlice<wchar_t const> str);
-
-    MTB_NODISCARD inline tSlice<wchar_t> StringTrimStart(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrimStart((tSlice<wchar_t const>)str)); }
-
-    MTB_NODISCARD tSlice<wchar_t const> StringTrimEnd(tSlice<wchar_t const> str);
-
-    MTB_NODISCARD inline tSlice<wchar_t> StringTrimEnd(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrimEnd((tSlice<wchar_t const>)str)); }
-
+    MTB_NODISCARD tSlice<char const> StringTrim(tSlice<char const> str);
+    MTB_NODISCARD inline tSlice<char> StringTrim(tSlice<char> str) { return SliceRemoveConst(StringTrim((tSlice<char const>)str)); }
     MTB_NODISCARD tSlice<wchar_t const> StringTrim(tSlice<wchar_t const> str);
-
     MTB_NODISCARD inline tSlice<wchar_t> StringTrim(tSlice<wchar_t> str) { return SliceRemoveConst(StringTrim((tSlice<wchar_t const>)str)); }
 
     //
