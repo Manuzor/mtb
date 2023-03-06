@@ -1216,17 +1216,15 @@ namespace mtb {
         // -- Typed Single-Item Allocation ------------------
         // --------------------------------------------------
         template<typename T>
-        MTB_NODISCARD T& CreateOne(eInit init = kClearToZero) const {
+        MTB_NODISCARD T* CreateOne(eInit init = kClearToZero) const {
             tSlice<void> raw = AllocRaw(MTB_sizeof(T), MTB_alignof(T), init);
-            MTB_ASSERT(raw);
-            return *SliceCast<T>(raw).ptr;
+            return SliceCast<T>(raw).ptr;
         }
 
         template<typename T>
-        MTB_NODISCARD T& DupeOne(T& one) const {
+        MTB_NODISCARD T* DupeOne(T& one) const {
             tSlice<void> raw = DupeRaw(StructSlice(one), MTB_alignof(T));
-            MTB_ASSERT(raw);
-            return *SliceCast<T>(raw).ptr;
+            return SliceCast<T>(raw).ptr;
         }
 
         template<typename T>
@@ -1975,7 +1973,7 @@ namespace mtb {
 // --------------------------------------------------
 // -- #Section Option -------------------------------
 // --------------------------------------------------
-#define MTB_OPTION_MOVE_SEMANTICS 1
+#define MTB_OPTION_MOVE_SEMANTICS 0
 
 namespace mtb {
     template<typename T>
@@ -2601,7 +2599,7 @@ void mtb::AlignAllocation(void** inout_ptr, size_t* inout_size, size_t alignment
     size_t a = alignment - 1;
     uintptr_t aligned = (unaligned + a) & ~a;
     uintptr_t delta = aligned - unaligned;
-    *(uint8_t*)inout_ptr += delta;
+    *(uint8_t**)inout_ptr += delta;
     if(inout_size) {
         *inout_size += delta;
     }
