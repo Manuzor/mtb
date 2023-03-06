@@ -264,7 +264,7 @@ void mstr_AppendStringZ(mstr_Builder* b, char const* str) {
 
 void mstr_TrimEnd(mstr_Builder* b) {
     while(b->len > 0) {
-        if(!isspace(b->ptr[b->len - 1])) {
+        if(!mstr_IsWhiteChar(b->ptr[b->len - 1])) {
             break;
         }
         b->len -= 1;
