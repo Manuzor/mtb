@@ -6,6 +6,7 @@
 #define MSTR_INCLUDED
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #if defined(STB_SPRINTF_H_INCLUDE)
 #include <stdarg.h>
@@ -94,7 +95,7 @@ typedef union mstr_Number {
     double f64;
     uint64_t u64;
     int64_t i64;
-} mstr_number;
+} mstr_Number;
 
 typedef struct mstr_ParseOptions {
     mstr_Number fallback_value;

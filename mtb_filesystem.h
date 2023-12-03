@@ -417,7 +417,7 @@ typedef struct mfs__Arena {
     uint8_t* ptr;
     size_t cap;
     size_t fill;
-    mfs__Arena* prev;
+    struct mfs__Arena* prev;
 } mfs__Arena;
 
 static const size_t arena_header_size = sizeof(mfs__Arena);
@@ -432,10 +432,10 @@ static mfs__Arena* mfs__EmbedArena(void* ptr, size_t size, size_t fill) {
     return arena;
 }
 
-struct mfs__ReallocResult {
+typedef struct mfs__ReallocResult {
     mfs_Error error;
     void* new_ptr;
-};
+} mfs__ReallocResult;
 
 static mfs__ReallocResult mfs__ArenaRealloc(mfs__Arena** arena_chain, mfs_Allocator allocator, void* old_ptr, size_t old_size, size_t new_size) {
     mfs__ReallocResult result = MFS_ZERO_INIT();
